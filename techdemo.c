@@ -595,8 +595,16 @@ static td_event_t events[] = {
 	TD_INTERP_AHSV (2000, 2000, TD_EASE_OUT, background_color, 0xff00ffff, 0xffff00ff),
 	
 	// Prerender the tickets thing.
-	TD_DRAW_TITLE  ("Buy tickets:",
+	TD_DRAW_TITLE  ("MCH2022",
+					"Get your tickets at\n"
 					"tickets.mch2022.org"),
+	
+	// Draw the tickets thing.
+	TD_SET_INT     (palette[1], 0xffffffff),
+	TD_SET_BOOL    (overlay_clip, true),
+	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
+	TD_DELAY       (5000),
+	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[0], 0xff000000, 0xffffffff),
 	
 	// Mark the end.
 	TD_DELAY       (   0),
@@ -694,15 +702,6 @@ bool pax_techdemo_draw(size_t now) {
 		pax_shade_rect(buffer, -1, &PAX_SHADER_TEXTURE(clip_buffer), NULL, 0, 0, width, height);
 		pax_pop_2d(buffer);
 	}
-	
-	// Draw the overlay on top.
-	// if (overlay_on_top) {
-	// 	pax_push_2d(buffer);
-	// 	pax_apply_2d(buffer, matrix_2d_scale(clip_scaling, clip_scaling));
-	// 	pax_apply_2d(buffer, matrix_2d_translate(clip_pan_x * width, clip_pan_y * height));
-	// 	pax_shade_rect(buffer, -1, &PAX_SHADER_TEXTURE(clip_buffer), NULL, 0, 0, width, height);
-	// 	pax_pop_2d(buffer);
-	// }
 	
 	return finished;
 }
