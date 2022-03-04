@@ -27,4 +27,4 @@ Depends on the PAX graphics API: https://github.com/robotman2412/pax-graphics
 | 3 sec            | fancy square      | ?
 | 6 sec            | curves            | Something about graphics
 | 4 sec            | loop of colors    | ?
-|                  | banner text       | Ticketshop
+| 8 sec            | banner text       | Ticketshop
