@@ -6,3 +6,10 @@ Depends on the PAX graphics API: https://github.com/robotman2412/pax-graphics
 ## TODO
 - Describe hardware in the DEMO in a non-techie friendly manner
 - Sponsor spots?
+
+## Points to mention
+- RP2040 microcontroller
+- ICE40UP5K FPGA
+- ESP32 microcontroller
+- BNO-055
+- BME-680
