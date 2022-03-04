@@ -30,6 +30,7 @@
 #include <esp_err.h>
 #include <esp_log.h>
 #include <string.h>
+#include <malloc.h>
 
 static const char *TAG = "pax-techdemo";
 
@@ -234,13 +235,17 @@ static void td_draw_title(size_t planned_time, size_t planned_duration, void *ar
 		// Title and subtitle.
 		pax_vec1_t title_size    = pax_text_size(font, 1, title);
 		pax_vec1_t subtitle_size = pax_text_size(font, 1, subtitle);
-		float title_scale        = width / title_size.x;
-		float subtitle_scale     = width / subtitle_size.x;
-		float total_height       = title_scale + subtitle_size.y * subtitle_scale;
-		float title_y            = (height - total_height) * 0.5;
+		float title_scale        = (int) (width / title_size.x    / font->default_size) * font->default_size;
+		float subtitle_scale     = (int) (width / subtitle_size.x / font->default_size) * font->default_size;
+		title_size               = pax_text_size(font, title_scale, title);
+		subtitle_size            = pax_text_size(font, subtitle_scale, subtitle);
+		float total_height       = title_scale + subtitle_size.y;
+		float title_x            = (width  - title_size.x)    * 0.5;
+		float title_y            = (height - total_height)    * 0.5;
+		float subtitle_x         = (width  - subtitle_size.x) * 0.5;
 		float subtitle_y         = title_y + title_scale;
-		pax_draw_text(buf, col, font, title_scale,    0, title_y,    title);
-		pax_draw_text(buf, col, font, subtitle_scale, 0, subtitle_y, subtitle);
+		pax_draw_text(buf, col, font, title_scale,    title_x,    title_y,    title);
+		pax_draw_text(buf, col, font, subtitle_scale, subtitle_x, subtitle_y, subtitle);
 	} else {
 		title    = raw;
 		// Just the title.
@@ -249,6 +254,8 @@ static void td_draw_title(size_t planned_time, size_t planned_duration, void *ar
 		float title_y            = (height - title_scale) * 0.5;
 		pax_draw_text(buf, col, font, title_scale, 0, title_y, title);
 	}
+	
+	free(raw);
 }
 
 // Linearly interpolate a variable.
