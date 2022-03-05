@@ -448,18 +448,52 @@ static void td_draw_curves() {
 	}
 }
 
+// Something something fancy air sensors.
+static void td_draw_aero() {
+	// A little placeholder scene.
+	pax_col_t sky_color   = 0xff00afff;
+	pax_col_t sun_color   = pax_col_lerp(255*angle_0, sky_color, 0xffffdf1f);
+	pax_col_t grass_color = pax_col_lerp(255*angle_0, sky_color, 0xff0faf2f);
+	
+	// Sun.
+	pax_push_2d(buffer);
+		pax_apply_2d(buffer, matrix_2d_scale    (35.0, 35.0));
+		pax_apply_2d(buffer, matrix_2d_translate( 1.2,  1.1));
+		pax_draw_circle(buffer, sun_color, 0, 0, 1);
+	pax_pop_2d(buffer);
+	
+	// Grass.
+	size_t n_points = 32;
+	pax_vec1_t curve[n_points];
+	pax_vec4_t ctl_points = {
+		.x0 = 0.0,  .y0 = 0.8,
+		.x1 = 0.25, .y1 = 0.7,
+		.x2 = 0.6,  .y2 = 0.85,
+		.x3 = 1.0,  .y3 = 0.8
+	};
+	pax_vectorise_bezier((pax_vec1_t *) curve, n_points, ctl_points);
+	
+	pax_push_2d(buffer);
+	pax_apply_2d(buffer, matrix_2d_scale(buffer->width, buffer->height + 1));
+	for (size_t i = 0; i < n_points - 1; i++) {
+		pax_draw_tri(buffer, grass_color, curve[i].x, curve[i].y, curve[i].x,   1,            curve[i+1].x, 1);
+		pax_draw_tri(buffer, grass_color, curve[i].x, curve[i].y, curve[i+1].x, curve[i+1].y, curve[i+1].x, 1);
+	}
+	pax_pop_2d(buffer);
+}
+
 /* ============= choreography ============= */
 /*
 	Goal:
 	Show off PAX' features while hiding performance limitations.
 	Features to show (in no particular order):
 	  ✓ Triangles
-	  - Arcs
+	  ✓ Arcs
 	  ✓ Circles
 	  - Clipping
 	  ✓ Advanced shaders
 	  - Texure mapping
-	  - Curves
+	  ✓ Curves
 	Relevant notes:
 	  - MCH2022 sponsors should probably go here, before the demo.
 	  - There should be an always present "skip" option (except sponsors maybe).
@@ -557,7 +591,7 @@ static td_event_t events[] = {
 	TD_SET_BOOL    (overlay_clip, false),
 	
 	// Start spinning the shapes.
-	TD_SHOW_TEXT   ("2D transformations"),
+	TD_SHOW_TEXT   ("Sample text"),
 	TD_INTERP_FLOAT(2000, 4000, TD_EASE,     angle_0, 0, M_PI*3),
 	TD_INTERP_FLOAT(2000, 4000, TD_EASE_IN,  angle_1, 0, M_PI*2),
 	
@@ -566,7 +600,7 @@ static td_event_t events[] = {
 	TD_INTERP_COL  (2500, 2000, TD_EASE_IN,  background_color, 0, 0xffff0000),
 	
 	// Show the shimmer effect.
-	TD_SHOW_TEXT   ("Shader support"),
+	TD_SHOW_TEXT   ("Sample text"),
 	TD_SET_INT     (to_draw,    TD_DRAW_SHIMMER),
 	TD_SET_BOOL    (use_background, false),
 	TD_INTERP_FLOAT(   0,  500, TD_EASE_OUT, buffer_scaling, 0.00001, 1),
@@ -579,7 +613,7 @@ static td_event_t events[] = {
 	TD_INTERP_COL  ( 500,  500, TD_EASE,     background_color, 0xffff0000, 0xff000000),
 	
 	// Draw funny arcs and curves.
-	TD_SHOW_TEXT   ("Curves"),
+	TD_SHOW_TEXT   ("Better graphics"),
 	TD_SET_INT     (to_draw,    TD_DRAW_CURVES),
 	TD_SET_FLOAT   (buffer_scaling, 1),
 	TD_SET_FLOAT   (angle_0,        0),
@@ -595,10 +629,19 @@ static td_event_t events[] = {
 	TD_INTERP_FLOAT( 250,  250, TD_EASE,     angle_0, 1, 2),
 	TD_INTERP_FLOAT( 500,  500, TD_EASE,     angle_0, 2, 3),
 	
+	// Funny sensors.
+	TD_SHOW_TEXT   ("Sample text"),
+	TD_SET_INT     (to_draw,    TD_DRAW_NONE),
+	TD_INTERP_COL  ( 500,  500, TD_EASE_IN,  background_color, 0xff000000, 0xff00afff),
+	TD_SET_INT     (to_draw,    TD_DRAW_AERO),
+	TD_INTERP_FLOAT(1000, 1000, TD_EASE_OUT, angle_0, 0, 1),
+	TD_DELAY       (3500),
+	TD_INTERP_FLOAT(1000, 1000, TD_EASE_IN,  angle_0, 1, 0),
+	
 	// Become colors.
 	TD_SHOW_TEXT   ("Colorful"),
 	TD_SET_INT     (to_draw, TD_DRAW_NONE),
-	TD_INTERP_AHSV (2000, 2000, TD_EASE_IN,  background_color, 0xff000000, 0xffffffff),
+	TD_INTERP_AHSV (2000, 2000, TD_EASE_IN,  background_color, 0xff8dffff, 0xffffffff),
 	TD_INTERP_AHSV (2000, 2000, TD_EASE_OUT, background_color, 0xff00ffff, 0xffff00ff),
 	
 	// Prerender the tickets thing.
@@ -691,14 +734,16 @@ bool pax_techdemo_draw(size_t now) {
 		case TD_DRAW_CURVES:
 			td_draw_curves();
 			break;
+		case TD_DRAW_AERO:
+			td_draw_aero();
+			break;
 	}
 	
 	pax_pop_2d(buffer);
 	
 	// Draw the text overlay.
-	pax_col_t text_col_merged = pax_col_merge(background_color, text_col);
-	if (text_col_merged != background_color) {
-		pax_draw_text(buffer, text_col_merged, PAX_FONT_DEFAULT, text_size, 0, 0, text_str);
+	if (text_col >= 0x01000000) {
+		pax_draw_text(buffer, text_col, PAX_FONT_DEFAULT, text_size, 0, 0, text_str);
 	}
 	
 	// Draw the global overlay as clip.

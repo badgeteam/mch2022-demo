@@ -40,6 +40,7 @@ extern "C" {
 #define TD_DRAW_SHAPES  1
 #define TD_DRAW_SHIMMER 2
 #define TD_DRAW_CURVES  3
+#define TD_DRAW_AERO    4
 
 #define TD_INTERP_TYPE_INT   0
 #define TD_INTERP_TYPE_COL   1
