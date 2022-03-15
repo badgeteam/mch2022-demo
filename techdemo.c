@@ -23,8 +23,11 @@
 */
 
 #include "techdemo.h"
+#include "sponsors.h"
+
 #include "pax_shaders.h"
 #include "pax_shapes.h"
+#include "pax_codecs.h"
 
 #include <esp_system.h>
 #include <esp_err.h>
@@ -34,10 +37,25 @@
 
 static const char *TAG = "pax-techdemo";
 
+/* ============== el sponsor ============== */
+
+// The sponsor logo.
+static pax_buf_t *sponsor_logo = NULL;
+// The position of the sponsor logo.
+static float      sponsor_logo_x;
+// The position of the sponsor logo.
+static float      sponsor_logo_y;
+// The sponsor text.
+static char      *sponsor_text;
+// The position of the sponsor text.
+static float      sponsor_text_x;
+// The position of the sponsor text.
+static float      sponsor_text_y;
+
 /* ======= choreographed varialbes ======== */
 
 // Next event in the choreography.
-static size_t current_event;
+static size_t     current_event;
 
 // Scaling applied to the clip buffer.
 static float      clip_scaling;
@@ -329,6 +347,31 @@ static void td_set_str(size_t planned_time, size_t planned_duration, void *args)
 	text_str = (char *) args;
 }
 
+// Prepare the sponsor for showing.
+static void td_prep_sponsor(sponsor_t *sponsor) {
+	// Remove the existing logo image, if any.
+	if (sponsor_logo) {
+		pax_buf_destroy(sponsor_logo);
+	} else {
+		sponsor_logo = malloc(sizeof(pax_buf_t));
+	}
+	
+	// Decode the PNG.
+	pax_decode_png_buf(sponsor_logo, sponsor->logo, sponsor->logo_len, PAX_BUF_4_GREY);
+	// Place it in the bottom right corner.
+	sponsor_logo_x = buffer->width  - sponsor_logo->width;
+	sponsor_logo_y = buffer->height - sponsor_logo->height;
+	
+	// Is there text?
+	sponsor_text = sponsor->text;
+	if (sponsor_text) {
+		// Then place it alongside the logo.
+		pax_vec1_t size = pax_text_size(PAX_FONT_DEFAULT, 18, sponsor_text);
+		sponsor_text_x = sponsor_logo_x - size.x;
+		sponsor_text_y = buffer->height - size.y;
+	}
+}
+
 /* =============== drawing ================ */
 
 // Draws a square, a circle and a triangle.
@@ -589,12 +632,10 @@ static td_event_t events[] = {
 	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0),
 	TD_INTERP_COL  (2400, 2400, TD_LINEAR,  palette[1], 0xffffffff, 0),
 	TD_SET_BOOL    (overlay_clip, false),
-	
 	// Start spinning the shapes.
 	TD_SHOW_TEXT   ("Sample text"),
 	TD_INTERP_FLOAT(2000, 4000, TD_EASE,     angle_0, 0, M_PI*3),
 	TD_INTERP_FLOAT(2000, 4000, TD_EASE_IN,  angle_1, 0, M_PI*2),
-	
 	// Zoom in on the circle.
 	TD_INTERP_FLOAT(   0, 2000, TD_EASE_IN,  buffer_scaling, 1, 3),
 	TD_INTERP_COL  (2500, 2000, TD_EASE_IN,  background_color, 0, 0xffff0000),
@@ -606,7 +647,6 @@ static td_event_t events[] = {
 	TD_INTERP_FLOAT(   0,  500, TD_EASE_OUT, buffer_scaling, 0.00001, 1),
 	TD_INTERP_FLOAT( 500,  500, TD_EASE,     angle_1, M_PI*0.5, 0),
 	TD_INTERP_FLOAT(1500, 1500, TD_EASE,     angle_0, 0, 1),
-	
 	// Fade away the yelloughw.
 	TD_SET_BOOL    (use_background, true),
 	TD_INTERP_FLOAT(   0,  500, TD_EASE_OUT, buffer_scaling, 1, 0.00001),
@@ -623,7 +663,7 @@ static td_event_t events[] = {
 	TD_INTERP_FLOAT(1500, 1500, TD_EASE,     angle_1, 0, 1),
 	TD_INTERP_FLOAT( 500,  500, TD_EASE,     angle_1, 1, 2),
 	TD_INTERP_FLOAT(1000, 1000, TD_EASE,     angle_1, 2, 3),
-	
+	// Curves go away.
 	TD_INTERP_FLOAT(   0, 1500, TD_EASE,     angle_4, 0, 1),
 	TD_INTERP_FLOAT( 750,  750, TD_EASE,     angle_0, 0, 1),
 	TD_INTERP_FLOAT( 250,  250, TD_EASE,     angle_0, 1, 2),
@@ -648,7 +688,6 @@ static td_event_t events[] = {
 	TD_DRAW_TITLE  ("MCH2022",
 					"Get your tickets at\n"
 					"tickets.mch2022.org"),
-	
 	// Draw the tickets thing.
 	TD_SET_INT     (palette[1], 0xffffffff),
 	TD_SET_BOOL    (overlay_clip, true),
