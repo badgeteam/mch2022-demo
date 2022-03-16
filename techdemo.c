@@ -51,6 +51,8 @@ static char      *sponsor_text;
 static float      sponsor_text_x;
 // The position of the sponsor text.
 static float      sponsor_text_y;
+// The opacity of the sponsor text and logo.
+static int        sponsor_alpha;
 
 /* ======= choreographed varialbes ======== */
 
@@ -177,6 +179,7 @@ void pax_techdemo_init(pax_buf_t *framebuffer, pax_buf_t *clipbuffer) {
 		// Reset variables.
 		current_event    = 0;
 		planned_time     = 0;
+		sponsor_alpha    = 0;
 		
 		palette[0]       = 0xffffffff;
 		palette[1]       = 0xffffffff;
@@ -348,13 +351,14 @@ static void td_set_str(size_t planned_time, size_t planned_duration, void *args)
 }
 
 // Prepare the sponsor for showing.
-static void td_prep_sponsor(sponsor_t *sponsor) {
+static void td_prep_sponsor(size_t planned_time, size_t planned_duration, void *args) {
 	// Remove the existing logo image, if any.
 	if (sponsor_logo) {
 		pax_buf_destroy(sponsor_logo);
 	} else {
 		sponsor_logo = malloc(sizeof(pax_buf_t));
 	}
+	sponsor_t *sponsor = &sponsors_arr[(size_t) args];
 	
 	// Decode the PNG.
 	pax_decode_png_buf(sponsor_logo, sponsor->logo, sponsor->logo_len, PAX_BUF_4_GREY);
@@ -543,6 +547,11 @@ static void td_draw_aero() {
 */
 
 #define TD_DELAY(time) {.duration=time,.callback=NULL}
+#define TD_SET_SPONSOR(id) {\
+			.duration = 0,\
+			.callback = td_prep_sponsor,\
+			.callback_args=id\
+		}
 #define TD_DRAW_TITLE(title, subtitle) {.duration=0,.callback=td_draw_title,.callback_args=title"\n"subtitle}
 #define TD_INTERP_INT(delay_time, interp_time, timing_func, variable, from, to) {\
 			.duration = delay_time,\
@@ -674,8 +683,13 @@ static td_event_t events[] = {
 	TD_SET_INT     (to_draw,    TD_DRAW_NONE),
 	TD_INTERP_COL  ( 500,  500, TD_EASE_IN,  background_color, 0xff000000, 0xff00afff),
 	TD_SET_INT     (to_draw,    TD_DRAW_AERO),
+	// Test sponsor.
+	TD_SET_SPONSOR (SPON_TEMP),
+	TD_INTERP_INT  (   0, 1000, TD_EASE_OUT, sponsor_alpha, 0, 255),
+	// Scene.
 	TD_INTERP_FLOAT(1000, 1000, TD_EASE_OUT, angle_0, 0, 1),
 	TD_DELAY       (3500),
+	TD_INTERP_INT  (   0, 1000, TD_EASE_IN,  sponsor_alpha, 255, 0),
 	TD_INTERP_FLOAT(1000, 1000, TD_EASE_IN,  angle_0, 1, 0),
 	
 	// Become colors.
@@ -756,6 +770,7 @@ bool pax_techdemo_draw(size_t now) {
 	// Use the dirty window to save resources.
 	pax_background(buffer, background_color);
 	
+	pax_reset_2d(buffer, PAX_RESET_TOP);
 	pax_push_2d(buffer);
 	// Apply transformations.
 	pax_apply_2d(buffer, matrix_2d_translate(width * 0.5, height * 0.5));
@@ -790,8 +805,29 @@ bool pax_techdemo_draw(size_t now) {
 		pax_push_2d(buffer);
 		pax_apply_2d(buffer, matrix_2d_scale(clip_scaling, clip_scaling));
 		pax_apply_2d(buffer, matrix_2d_translate(clip_pan_x * width, clip_pan_y * height));
-		pax_shade_rect(buffer, -1, &PAX_SHADER_TEXTURE(clip_buffer), NULL, 0, 0, width, height);
+		pax_draw_image(buffer, clip_buffer, 0, 0);
 		pax_pop_2d(buffer);
+	}
+	
+	// Draw the sponsor.
+	if (sponsor_alpha && sponsor_logo) {
+		pax_col_t col = pax_col_argb(sponsor_alpha, 255, 255, 255);
+		// Draw the logo.
+		pax_shade_rect(
+			buffer, col,
+			&PAX_SHADER_TEXTURE(sponsor_logo), NULL,
+			sponsor_logo_x, sponsor_logo_y,
+			sponsor_logo->width, sponsor_logo->height
+		);
+		// Draw the text.
+		if (sponsor_text) {
+			pax_draw_text(
+				buffer, col,
+				NULL, 18,
+				sponsor_text_x, sponsor_text_y,
+				sponsor_text
+			);
+		}
 	}
 	
 	return finished;
