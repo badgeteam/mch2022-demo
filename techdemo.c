@@ -361,7 +361,7 @@ static void td_prep_sponsor(size_t planned_time, size_t planned_duration, void *
 	sponsor_t *sponsor = &sponsors_arr[(size_t) args];
 	
 	// Decode the PNG.
-	pax_decode_png_buf(sponsor_logo, sponsor->logo, sponsor->logo_len, PAX_BUF_4_GREY);
+	pax_decode_png_buf(sponsor_logo, sponsor->logo, sponsor->logo_len, PAX_BUF_4_GREY, CODEC_FLAG_OPTIMAL);
 	// Place it in the bottom right corner.
 	sponsor_logo_x = buffer->width  - sponsor_logo->width;
 	sponsor_logo_y = buffer->height - sponsor_logo->height;
