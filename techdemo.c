@@ -23,20 +23,41 @@
 */
 
 #include "techdemo.h"
+#include "sponsors.h"
+
 #include "pax_shaders.h"
 #include "pax_shapes.h"
+#include "pax_codecs.h"
 
 #include <esp_system.h>
 #include <esp_err.h>
 #include <esp_log.h>
 #include <string.h>
+#include <malloc.h>
 
 static const char *TAG = "pax-techdemo";
+
+/* ============== el sponsor ============== */
+
+// The sponsor logo.
+static pax_buf_t *sponsor_logo = NULL;
+// The position of the sponsor logo.
+static float      sponsor_logo_x;
+// The position of the sponsor logo.
+static float      sponsor_logo_y;
+// The sponsor text.
+static char      *sponsor_text;
+// The position of the sponsor text.
+static float      sponsor_text_x;
+// The position of the sponsor text.
+static float      sponsor_text_y;
+// The opacity of the sponsor text and logo.
+static int        sponsor_alpha;
 
 /* ======= choreographed varialbes ======== */
 
 // Next event in the choreography.
-static size_t current_event;
+static size_t     current_event;
 
 // Scaling applied to the clip buffer.
 static float      clip_scaling;
@@ -158,6 +179,7 @@ void pax_techdemo_init(pax_buf_t *framebuffer, pax_buf_t *clipbuffer) {
 		// Reset variables.
 		current_event    = 0;
 		planned_time     = 0;
+		sponsor_alpha    = 0;
 		
 		palette[0]       = 0xffffffff;
 		palette[1]       = 0xffffffff;
@@ -234,13 +256,17 @@ static void td_draw_title(size_t planned_time, size_t planned_duration, void *ar
 		// Title and subtitle.
 		pax_vec1_t title_size    = pax_text_size(font, 1, title);
 		pax_vec1_t subtitle_size = pax_text_size(font, 1, subtitle);
-		float title_scale        = width / title_size.x;
-		float subtitle_scale     = width / subtitle_size.x;
-		float total_height       = title_scale + subtitle_size.y * subtitle_scale;
-		float title_y            = (height - total_height) * 0.5;
+		float title_scale        = (int) (width / title_size.x    / font->default_size) * font->default_size;
+		float subtitle_scale     = (int) (width / subtitle_size.x / font->default_size) * font->default_size;
+		title_size               = pax_text_size(font, title_scale, title);
+		subtitle_size            = pax_text_size(font, subtitle_scale, subtitle);
+		float total_height       = title_scale + subtitle_size.y;
+		float title_x            = (width  - title_size.x)    * 0.5;
+		float title_y            = (height - total_height)    * 0.5;
+		float subtitle_x         = (width  - subtitle_size.x) * 0.5;
 		float subtitle_y         = title_y + title_scale;
-		pax_draw_text(buf, col, font, title_scale,    0, title_y,    title);
-		pax_draw_text(buf, col, font, subtitle_scale, 0, subtitle_y, subtitle);
+		pax_draw_text(buf, col, font, title_scale,    title_x,    title_y,    title);
+		pax_draw_text(buf, col, font, subtitle_scale, subtitle_x, subtitle_y, subtitle);
 	} else {
 		title    = raw;
 		// Just the title.
@@ -249,6 +275,8 @@ static void td_draw_title(size_t planned_time, size_t planned_duration, void *ar
 		float title_y            = (height - title_scale) * 0.5;
 		pax_draw_text(buf, col, font, title_scale, 0, title_y, title);
 	}
+	
+	free(raw);
 }
 
 // Linearly interpolate a variable.
@@ -320,6 +348,32 @@ static void td_set_var(size_t planned_time, size_t planned_duration, void *args)
 // Set THE string.
 static void td_set_str(size_t planned_time, size_t planned_duration, void *args) {
 	text_str = (char *) args;
+}
+
+// Prepare the sponsor for showing.
+static void td_prep_sponsor(size_t planned_time, size_t planned_duration, void *args) {
+	// Remove the existing logo image, if any.
+	if (sponsor_logo) {
+		pax_buf_destroy(sponsor_logo);
+	} else {
+		sponsor_logo = malloc(sizeof(pax_buf_t));
+	}
+	sponsor_t *sponsor = &sponsors_arr[(size_t) args];
+	
+	// Decode the PNG.
+	pax_decode_png_buf(sponsor_logo, sponsor->logo, sponsor->logo_len, PAX_BUF_4_GREY, CODEC_FLAG_OPTIMAL);
+	// Place it in the bottom right corner.
+	sponsor_logo_x = buffer->width  - sponsor_logo->width;
+	sponsor_logo_y = buffer->height - sponsor_logo->height;
+	
+	// Is there text?
+	sponsor_text = sponsor->text;
+	if (sponsor_text) {
+		// Then place it alongside the logo.
+		pax_vec1_t size = pax_text_size(PAX_FONT_DEFAULT, 18, sponsor_text);
+		sponsor_text_x = sponsor_logo_x - size.x;
+		sponsor_text_y = buffer->height - size.y;
+	}
 }
 
 /* =============== drawing ================ */
@@ -441,24 +495,63 @@ static void td_draw_curves() {
 	}
 }
 
+// Something something fancy air sensors.
+static void td_draw_aero() {
+	// A little placeholder scene.
+	pax_col_t sky_color   = 0xff00afff;
+	pax_col_t sun_color   = pax_col_lerp(255*angle_0, sky_color, 0xffffdf1f);
+	pax_col_t grass_color = pax_col_lerp(255*angle_0, sky_color, 0xff0faf2f);
+	
+	// Sun.
+	pax_push_2d(buffer);
+		pax_apply_2d(buffer, matrix_2d_scale    (35.0, 35.0));
+		pax_apply_2d(buffer, matrix_2d_translate( 1.2,  1.1));
+		pax_draw_circle(buffer, sun_color, 0, 0, 1);
+	pax_pop_2d(buffer);
+	
+	// Grass.
+	size_t n_points = 32;
+	pax_vec1_t curve[n_points];
+	pax_vec4_t ctl_points = {
+		.x0 = 0.0,  .y0 = 0.8,
+		.x1 = 0.25, .y1 = 0.7,
+		.x2 = 0.6,  .y2 = 0.85,
+		.x3 = 1.0,  .y3 = 0.8
+	};
+	pax_vectorise_bezier((pax_vec1_t *) curve, n_points, ctl_points);
+	
+	pax_push_2d(buffer);
+	pax_apply_2d(buffer, matrix_2d_scale(buffer->width, buffer->height + 1));
+	for (size_t i = 0; i < n_points - 1; i++) {
+		pax_draw_tri(buffer, grass_color, curve[i].x, curve[i].y, curve[i].x,   1,            curve[i+1].x, 1);
+		pax_draw_tri(buffer, grass_color, curve[i].x, curve[i].y, curve[i+1].x, curve[i+1].y, curve[i+1].x, 1);
+	}
+	pax_pop_2d(buffer);
+}
+
 /* ============= choreography ============= */
 /*
 	Goal:
 	Show off PAX' features while hiding performance limitations.
 	Features to show (in no particular order):
 	  ✓ Triangles
-	  - Arcs
+	  ✓ Arcs
 	  ✓ Circles
 	  - Clipping
 	  ✓ Advanced shaders
 	  - Texure mapping
-	  - Curves
+	  ✓ Curves
 	Relevant notes:
 	  - MCH2022 sponsors should probably go here, before the demo.
 	  - There should be an always present "skip" option (except sponsors maybe).
 */
 
 #define TD_DELAY(time) {.duration=time,.callback=NULL}
+#define TD_SET_SPONSOR(id) {\
+			.duration = 0,\
+			.callback = td_prep_sponsor,\
+			.callback_args=id\
+		}
 #define TD_DRAW_TITLE(title, subtitle) {.duration=0,.callback=td_draw_title,.callback_args=title"\n"subtitle}
 #define TD_INTERP_INT(delay_time, interp_time, timing_func, variable, from, to) {\
 			.duration = delay_time,\
@@ -548,31 +641,28 @@ static td_event_t events[] = {
 	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0),
 	TD_INTERP_COL  (2400, 2400, TD_LINEAR,  palette[1], 0xffffffff, 0),
 	TD_SET_BOOL    (overlay_clip, false),
-	
 	// Start spinning the shapes.
-	TD_SHOW_TEXT   ("2D transformations"),
+	TD_SHOW_TEXT   ("Sample text"),
 	TD_INTERP_FLOAT(2000, 4000, TD_EASE,     angle_0, 0, M_PI*3),
 	TD_INTERP_FLOAT(2000, 4000, TD_EASE_IN,  angle_1, 0, M_PI*2),
-	
 	// Zoom in on the circle.
 	TD_INTERP_FLOAT(   0, 2000, TD_EASE_IN,  buffer_scaling, 1, 3),
 	TD_INTERP_COL  (2500, 2000, TD_EASE_IN,  background_color, 0, 0xffff0000),
 	
 	// Show the shimmer effect.
-	TD_SHOW_TEXT   ("Shader support"),
+	TD_SHOW_TEXT   ("Sample text"),
 	TD_SET_INT     (to_draw,    TD_DRAW_SHIMMER),
 	TD_SET_BOOL    (use_background, false),
 	TD_INTERP_FLOAT(   0,  500, TD_EASE_OUT, buffer_scaling, 0.00001, 1),
 	TD_INTERP_FLOAT( 500,  500, TD_EASE,     angle_1, M_PI*0.5, 0),
 	TD_INTERP_FLOAT(1500, 1500, TD_EASE,     angle_0, 0, 1),
-	
 	// Fade away the yelloughw.
 	TD_SET_BOOL    (use_background, true),
 	TD_INTERP_FLOAT(   0,  500, TD_EASE_OUT, buffer_scaling, 1, 0.00001),
 	TD_INTERP_COL  ( 500,  500, TD_EASE,     background_color, 0xffff0000, 0xff000000),
 	
 	// Draw funny arcs and curves.
-	TD_SHOW_TEXT   ("Curves"),
+	TD_SHOW_TEXT   ("Better graphics"),
 	TD_SET_INT     (to_draw,    TD_DRAW_CURVES),
 	TD_SET_FLOAT   (buffer_scaling, 1),
 	TD_SET_FLOAT   (angle_0,        0),
@@ -582,21 +672,42 @@ static td_event_t events[] = {
 	TD_INTERP_FLOAT(1500, 1500, TD_EASE,     angle_1, 0, 1),
 	TD_INTERP_FLOAT( 500,  500, TD_EASE,     angle_1, 1, 2),
 	TD_INTERP_FLOAT(1000, 1000, TD_EASE,     angle_1, 2, 3),
-	
+	// Curves go away.
 	TD_INTERP_FLOAT(   0, 1500, TD_EASE,     angle_4, 0, 1),
 	TD_INTERP_FLOAT( 750,  750, TD_EASE,     angle_0, 0, 1),
 	TD_INTERP_FLOAT( 250,  250, TD_EASE,     angle_0, 1, 2),
 	TD_INTERP_FLOAT( 500,  500, TD_EASE,     angle_0, 2, 3),
 	
+	// Funny sensors.
+	TD_SHOW_TEXT   ("Sample text"),
+	TD_SET_INT     (to_draw,    TD_DRAW_NONE),
+	TD_INTERP_COL  ( 500,  500, TD_EASE_IN,  background_color, 0xff000000, 0xff00afff),
+	TD_SET_INT     (to_draw,    TD_DRAW_AERO),
+	// Test sponsor.
+	TD_SET_SPONSOR (SPON_TEMP),
+	TD_INTERP_INT  (   0, 1000, TD_EASE_OUT, sponsor_alpha, 0, 255),
+	// Scene.
+	TD_INTERP_FLOAT(1000, 1000, TD_EASE_OUT, angle_0, 0, 1),
+	TD_DELAY       (3500),
+	TD_INTERP_INT  (   0, 1000, TD_EASE_IN,  sponsor_alpha, 255, 0),
+	TD_INTERP_FLOAT(1000, 1000, TD_EASE_IN,  angle_0, 1, 0),
+	
 	// Become colors.
 	TD_SHOW_TEXT   ("Colorful"),
 	TD_SET_INT     (to_draw, TD_DRAW_NONE),
-	TD_INTERP_AHSV (2000, 2000, TD_EASE_IN,  background_color, 0xff000000, 0xffffffff),
+	TD_INTERP_AHSV (2000, 2000, TD_EASE_IN,  background_color, 0xff8dffff, 0xffffffff),
 	TD_INTERP_AHSV (2000, 2000, TD_EASE_OUT, background_color, 0xff00ffff, 0xffff00ff),
 	
 	// Prerender the tickets thing.
-	TD_DRAW_TITLE  ("Buy tickets:",
+	TD_DRAW_TITLE  ("MCH2022",
+					"Get your tickets at\n"
 					"tickets.mch2022.org"),
+	// Draw the tickets thing.
+	TD_SET_INT     (palette[1], 0xffffffff),
+	TD_SET_BOOL    (overlay_clip, true),
+	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
+	TD_DELAY       (5000),
+	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[0], 0xff000000, 0xffffffff),
 	
 	// Mark the end.
 	TD_DELAY       (   0),
@@ -659,6 +770,7 @@ bool pax_techdemo_draw(size_t now) {
 	// Use the dirty window to save resources.
 	pax_background(buffer, background_color);
 	
+	pax_reset_2d(buffer, PAX_RESET_TOP);
 	pax_push_2d(buffer);
 	// Apply transformations.
 	pax_apply_2d(buffer, matrix_2d_translate(width * 0.5, height * 0.5));
@@ -676,14 +788,16 @@ bool pax_techdemo_draw(size_t now) {
 		case TD_DRAW_CURVES:
 			td_draw_curves();
 			break;
+		case TD_DRAW_AERO:
+			td_draw_aero();
+			break;
 	}
 	
 	pax_pop_2d(buffer);
 	
 	// Draw the text overlay.
-	pax_col_t text_col_merged = pax_col_merge(background_color, text_col);
-	if (text_col_merged != background_color) {
-		pax_draw_text(buffer, text_col_merged, PAX_FONT_DEFAULT, text_size, 0, 0, text_str);
+	if (text_col >= 0x01000000) {
+		pax_draw_text(buffer, text_col, PAX_FONT_DEFAULT, text_size, 0, 0, text_str);
 	}
 	
 	// Draw the global overlay as clip.
@@ -691,18 +805,30 @@ bool pax_techdemo_draw(size_t now) {
 		pax_push_2d(buffer);
 		pax_apply_2d(buffer, matrix_2d_scale(clip_scaling, clip_scaling));
 		pax_apply_2d(buffer, matrix_2d_translate(clip_pan_x * width, clip_pan_y * height));
-		pax_shade_rect(buffer, -1, &PAX_SHADER_TEXTURE(clip_buffer), NULL, 0, 0, width, height);
+		pax_draw_image(buffer, clip_buffer, 0, 0);
 		pax_pop_2d(buffer);
 	}
 	
-	// Draw the overlay on top.
-	// if (overlay_on_top) {
-	// 	pax_push_2d(buffer);
-	// 	pax_apply_2d(buffer, matrix_2d_scale(clip_scaling, clip_scaling));
-	// 	pax_apply_2d(buffer, matrix_2d_translate(clip_pan_x * width, clip_pan_y * height));
-	// 	pax_shade_rect(buffer, -1, &PAX_SHADER_TEXTURE(clip_buffer), NULL, 0, 0, width, height);
-	// 	pax_pop_2d(buffer);
-	// }
+	// Draw the sponsor.
+	if (sponsor_alpha && sponsor_logo) {
+		pax_col_t col = pax_col_argb(sponsor_alpha, 255, 255, 255);
+		// Draw the logo.
+		pax_shade_rect(
+			buffer, col,
+			&PAX_SHADER_TEXTURE(sponsor_logo), NULL,
+			sponsor_logo_x, sponsor_logo_y,
+			sponsor_logo->width, sponsor_logo->height
+		);
+		// Draw the text.
+		if (sponsor_text) {
+			pax_draw_text(
+				buffer, col,
+				NULL, 18,
+				sponsor_text_x, sponsor_text_y,
+				sponsor_text
+			);
+		}
+	}
 	
 	return finished;
 }
