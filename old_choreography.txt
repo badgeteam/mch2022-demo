@@ -1,0 +1,81 @@
+static td_event_t events[] = {
+	// Prerender some text.
+	TD_DRAW_TITLE  ("MCH2022",
+					"Friday, 22 July, 2022\n"
+					"Zeewolde, Netherlands"),
+	
+	// Fade out a cutout.
+	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0),
+	TD_INTERP_COL  (2400, 2400, TD_LINEAR,  palette[1], 0xffffffff, 0),
+	TD_SET_BOOL    (overlay_clip, false),
+	// Start spinning the shapes.
+	TD_SHOW_TEXT   ("Sample text"),
+	TD_INTERP_FLOAT(2000, 4000, TD_EASE,     angle_0, 0, M_PI*3),
+	TD_INTERP_FLOAT(2000, 4000, TD_EASE_IN,  angle_1, 0, M_PI*2),
+	// Zoom in on the circle.
+	TD_INTERP_FLOAT(   0, 2000, TD_EASE_IN,  buffer_scaling, 1, 3),
+	TD_INTERP_COL  (2500, 2000, TD_EASE_IN,  background_color, 0, 0xffff0000),
+	
+	// Show the shimmer effect.
+	TD_SHOW_TEXT   ("Sample text"),
+	TD_SET_INT     (to_draw,    TD_DRAW_SHIMMER),
+	TD_SET_BOOL    (use_background, false),
+	TD_INTERP_FLOAT(   0,  500, TD_EASE_OUT, buffer_scaling, 0.00001, 1),
+	TD_INTERP_FLOAT( 500,  500, TD_EASE,     angle_1, M_PI*0.5, 0),
+	TD_INTERP_FLOAT(1500, 1500, TD_EASE,     angle_0, 0, 1),
+	// Fade away the yelloughw.
+	TD_SET_BOOL    (use_background, true),
+	TD_INTERP_FLOAT(   0,  500, TD_EASE_OUT, buffer_scaling, 1, 0.00001),
+	TD_INTERP_COL  ( 500,  500, TD_EASE,     background_color, 0xffff0000, 0xff000000),
+	
+	// Draw funny arcs and curves.
+	TD_SHOW_TEXT   ("Better graphics"),
+	TD_SET_INT     (to_draw,    TD_DRAW_CURVES),
+	TD_SET_FLOAT   (buffer_scaling, 1),
+	TD_SET_FLOAT   (angle_0,        0),
+	TD_SET_FLOAT   (angle_4,        0),
+	TD_INTERP_FLOAT(   0, 4500, TD_EASE,     angle_2, 0, M_PI * 0.5),
+	TD_INTERP_FLOAT(   0, 3000, TD_EASE,     angle_3, 0, 1),
+	TD_INTERP_FLOAT(1500, 1500, TD_EASE,     angle_1, 0, 1),
+	TD_INTERP_FLOAT( 500,  500, TD_EASE,     angle_1, 1, 2),
+	TD_INTERP_FLOAT(1000, 1000, TD_EASE,     angle_1, 2, 3),
+	// Curves go away.
+	TD_INTERP_FLOAT(   0, 1500, TD_EASE,     angle_4, 0, 1),
+	TD_INTERP_FLOAT( 750,  750, TD_EASE,     angle_0, 0, 1),
+	TD_INTERP_FLOAT( 250,  250, TD_EASE,     angle_0, 1, 2),
+	TD_INTERP_FLOAT( 500,  500, TD_EASE,     angle_0, 2, 3),
+	
+	// Funny sensors.
+	TD_SHOW_TEXT   ("Sample text"),
+	TD_SET_INT     (to_draw,    TD_DRAW_NONE),
+	TD_INTERP_COL  ( 500,  500, TD_EASE_IN,  background_color, 0xff000000, 0xff00afff),
+	TD_SET_INT     (to_draw,    TD_DRAW_AERO),
+	// Test sponsor.
+	TD_SET_SPONSOR (SPON_TEMP),
+	TD_INTERP_INT  (   0, 1000, TD_EASE_OUT, sponsor_alpha, 0, 255),
+	// Scene.
+	TD_INTERP_FLOAT(1000, 1000, TD_EASE_OUT, angle_0, 0, 1),
+	TD_DELAY       (3500),
+	TD_INTERP_INT  (   0, 1000, TD_EASE_IN,  sponsor_alpha, 255, 0),
+	TD_INTERP_FLOAT(1000, 1000, TD_EASE_IN,  angle_0, 1, 0),
+	
+	// Become colors.
+	TD_SHOW_TEXT   ("Colorful"),
+	TD_SET_INT     (to_draw, TD_DRAW_NONE),
+	TD_INTERP_AHSV (2000, 2000, TD_EASE_IN,  background_color, 0xff8dffff, 0xffffffff),
+	TD_INTERP_AHSV (2000, 2000, TD_EASE_OUT, background_color, 0xff00ffff, 0xffff00ff),
+	
+	// Prerender the tickets thing.
+	TD_DRAW_TITLE  ("MCH2022",
+					"Get your tickets at\n"
+					"tickets.mch2022.org"),
+	// Draw the tickets thing.
+	TD_SET_INT     (palette[1], 0xffffffff),
+	TD_SET_BOOL    (overlay_clip, true),
+	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
+	TD_DELAY       (5000),
+	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[0], 0xff000000, 0xffffffff),
+	
+	// Mark the end.
+	TD_DELAY       (   0),
+};

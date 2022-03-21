@@ -51,8 +51,8 @@ extern "C" {
 #define TD_EASE_IN 2
 #define TD_EASE_OUT 3
 
-#define PAX_TD_BUF_TYPE  PAX_BUF_2_PAL
-#define PAX_TD_BUF_STR  "PAX_BUF_2_PAL"
+#define PAX_TD_BUF_TYPE  PAX_BUF_1_PAL
+#define PAX_TD_BUF_STR  "PAX_BUF_1_PAL"
 
 struct td_event;
 struct td_lerp;

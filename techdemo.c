@@ -47,6 +47,8 @@ static float      sponsor_logo_x;
 static float      sponsor_logo_y;
 // The sponsor text.
 static char      *sponsor_text;
+// The color of the sponsor text.
+static pax_col_t  sponsor_col;
 // The position of the sponsor text.
 static float      sponsor_text_x;
 // The position of the sponsor text.
@@ -125,11 +127,9 @@ static size_t current_time;
 // Planned time for the next event.
 static size_t planned_time;
 // Palette used for the clip buffer.
-static pax_col_t palette[4] = {
+static pax_col_t palette[2] = {
 	0xffffffff,
 	0xffffffff,
-	0xffffffff,
-	0x00000000
 };
 
 // Initialise the tech demo.
@@ -180,6 +180,7 @@ void pax_techdemo_init(pax_buf_t *framebuffer, pax_buf_t *clipbuffer) {
 		current_event    = 0;
 		planned_time     = 0;
 		sponsor_alpha    = 0;
+		sponsor_col      = 0xff000000;
 		
 		palette[0]       = 0xffffffff;
 		palette[1]       = 0xffffffff;
@@ -378,7 +379,7 @@ static void td_prep_sponsor(size_t planned_time, size_t planned_duration, void *
 
 /* =============== drawing ================ */
 
-// Draws a square, a circle and a triangle.
+/* ==== Draws a square, a circle and a triangle ==== */
 static void td_draw_shapes() {
 	float scale = fminf(width * 0.2, height * 0.4);
 	pax_col_t col = 0xffff0000;
@@ -405,7 +406,7 @@ static void td_draw_shapes() {
 	pax_draw_tri(buffer, col, -my_cos, -my_sin, -my_cos, my_sin, 1, 0);
 }
 
-// Draws a funny shimmer.
+/* ==== Draws a funny shimmer ==== */
 static void td_draw_shimmer() {
 	pax_apply_2d(buffer, matrix_2d_translate(width * 0.5, height * 0.5));
 	pax_apply_2d(buffer, matrix_2d_rotate(angle_1));
@@ -417,7 +418,7 @@ static void td_draw_shimmer() {
 	pax_shade_rect(buffer, -1, &shader, NULL, -50, -50, 100, 100);
 }
 
-// Show arcs and curves.
+/* ==== Show arcs and curves ==== */
 static void td_draw_curves() {
 	// Bezier curve control points.
 	pax_vec4_t ctl0 = {
@@ -495,37 +496,85 @@ static void td_draw_curves() {
 	}
 }
 
-// Something something fancy air sensors.
-static void td_draw_aero() {
-	// A little placeholder scene.
-	pax_col_t sky_color   = 0xff00afff;
-	pax_col_t sun_color   = pax_col_lerp(255*angle_0, sky_color, 0xffffdf1f);
-	pax_col_t grass_color = pax_col_lerp(255*angle_0, sky_color, 0xff0faf2f);
+/* ==== Something something fancy air sensors ==== */
+
+// A very low poly bird.
+// Flap angle ranges from 0 to 1 and then repeats.
+static void td_bird(pax_col_t color, float flap_angle, float random_offset) {
+	float wing_y = sin((flap_angle + random_offset) * 2 * M_PI);
 	
-	// Sun.
 	pax_push_2d(buffer);
-		pax_apply_2d(buffer, matrix_2d_scale    (35.0, 35.0));
-		pax_apply_2d(buffer, matrix_2d_translate( 1.2,  1.1));
-		pax_draw_circle(buffer, sun_color, 0, 0, 1);
+	// Bird size.
+	pax_apply_2d(buffer, matrix_2d_scale(10, 10));
+	// Flap with the wings.
+	pax_apply_2d(buffer, matrix_2d_translate(0, wing_y * -0.2));
+	// Some randomness.
+	pax_apply_2d(buffer, matrix_2d_translate(0, sin((flap_angle + random_offset) * 0.25 * M_PI) * 0.5));
+	
+	// Left wing.
+	pax_draw_tri(buffer, color, -1, wing_y, 0, -0.5, 0, 0.5);
+	// Right wing.
+	pax_draw_tri(buffer, color,  1, wing_y, 0, -0.5, 0, 0.5);
+	
+	pax_pop_2d(buffer);
+}
+
+// The scene for air sensors.
+// Parameters:
+//   angle_0: opacity
+//   angle_1: birds flapping wings
+//   angle_2: apple rotation
+//   angle_3: birds Y (relative to buffer size)
+//   angle_4: apple Y (relative to buffer size)
+static void td_draw_aero() {
+	// A falling apple scene.
+	pax_col_t sky_color   = 0xffbdefef;
+	pax_col_t bird_color  = 0xff000000;
+	pax_col_t apple_color = 0xfff82626;
+	pax_col_t stem_color  = 0xff87381e;
+	
+	// Interpolate colors.
+	uint8_t   part        = (uint8_t) (255.0 * angle_0);
+	bird_color  = pax_col_lerp(part, sky_color, bird_color);
+	apple_color = pax_col_lerp(part, sky_color, apple_color);
+	stem_color  = pax_col_lerp(part, sky_color, stem_color);
+	
+	// TODO: Draw the clouds.
+	
+	// Draw the birds.
+	pax_push_2d(buffer);
+	// General vicinity.
+	pax_apply_2d(buffer, matrix_2d_translate(buffer->width * 0.75, buffer->height * (0.5 + angle_3)));
+	
+	// Multiple randomly placed birds.
+	pax_apply_2d(buffer, matrix_2d_translate(-15, 30));
+	td_bird(bird_color, angle_1, 9.1);
+	
+	pax_apply_2d(buffer, matrix_2d_translate(35, -20));
+	td_bird(bird_color, angle_1, 12.9);
+	
+	pax_apply_2d(buffer, matrix_2d_translate(-15, -15));
+	td_bird(bird_color, angle_1, 23.2);
+	
+	pax_apply_2d(buffer, matrix_2d_translate(35, -10));
+	td_bird(bird_color, angle_1, 5.5);
+	
 	pax_pop_2d(buffer);
 	
-	// Grass.
-	size_t n_points = 32;
-	pax_vec1_t curve[n_points];
-	pax_vec4_t ctl_points = {
-		.x0 = 0.0,  .y0 = 0.8,
-		.x1 = 0.25, .y1 = 0.7,
-		.x2 = 0.6,  .y2 = 0.85,
-		.x3 = 1.0,  .y3 = 0.8
-	};
-	pax_vectorise_bezier((pax_vec1_t *) curve, n_points, ctl_points);
-	
+	// Draw the apple.
 	pax_push_2d(buffer);
-	pax_apply_2d(buffer, matrix_2d_scale(buffer->width, buffer->height + 1));
-	for (size_t i = 0; i < n_points - 1; i++) {
-		pax_draw_tri(buffer, grass_color, curve[i].x, curve[i].y, curve[i].x,   1,            curve[i+1].x, 1);
-		pax_draw_tri(buffer, grass_color, curve[i].x, curve[i].y, curve[i+1].x, curve[i+1].y, curve[i+1].x, 1);
-	}
+	// Place of the apple.
+	pax_apply_2d(buffer, matrix_2d_translate(buffer->width * 0.25, buffer->height * (0.5 + angle_4)));
+	// Make it wobble very slightly.
+	pax_apply_2d(buffer, matrix_2d_translate(cos(angle_2 * 0.125 * M_PI) * 15, sin(angle_2 * 0.25 * M_PI) * 10));
+	// Rotate it progressively.
+	pax_apply_2d(buffer, matrix_2d_rotate(angle_2));
+	// Apple size.
+	pax_apply_2d(buffer, matrix_2d_scale(12, 12));
+	
+	pax_draw_circle(buffer, apple_color, 0, 0, 1);
+	pax_draw_tri(buffer, stem_color, 0.8, 0, 1.5, 0, 1.5, 0.3);
+	
 	pax_pop_2d(buffer);
 }
 
@@ -627,85 +676,60 @@ static void td_draw_aero() {
 			.callback = td_set_str,\
 			.callback_args = (value)\
 		}
-#define TD_SHOW_TEXT(str) \
+#define TD_SHOW_LIGHT_TEXT(str) \
 		TD_SET_STR(str),\
 		TD_INTERP_COL(0, 2500, TD_EASE_IN, text_col, 0xffffffff, 0x00ffffff)
+#define TD_SHOW_DARK_TEXT(str) \
+		TD_SET_STR(str),\
+		TD_INTERP_COL(0, 2500, TD_EASE_IN, text_col, 0xff000000, 0x00000000)
 
 static td_event_t events[] = {
 	// Prerender some text.
-	TD_DRAW_TITLE  ("MCH2022",
-					"Friday, 22 July, 2022\n"
-					"Zeewolde, Netherlands"),
+	TD_DRAW_TITLE     ("MCH2022",
+					   "Friday, 22 July, 2022\n"
+					   "Zeewolde, Netherlands"),
 	
 	// Fade out a cutout.
-	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0),
-	TD_INTERP_COL  (2400, 2400, TD_LINEAR,  palette[1], 0xffffffff, 0),
-	TD_SET_BOOL    (overlay_clip, false),
-	// Start spinning the shapes.
-	TD_SHOW_TEXT   ("Sample text"),
-	TD_INTERP_FLOAT(2000, 4000, TD_EASE,     angle_0, 0, M_PI*3),
-	TD_INTERP_FLOAT(2000, 4000, TD_EASE_IN,  angle_1, 0, M_PI*2),
-	// Zoom in on the circle.
-	TD_INTERP_FLOAT(   0, 2000, TD_EASE_IN,  buffer_scaling, 1, 3),
-	TD_INTERP_COL  (2500, 2000, TD_EASE_IN,  background_color, 0, 0xffff0000),
+	TD_SET_INT        (background_color, 0xffbdefef),
+	TD_SET_INT        (to_draw,    TD_DRAW_NONE),
+	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
+	TD_INTERP_COL     (   0, 2400, TD_LINEAR,  palette[0], 0xff000000, 0x00ffffff),
+	TD_INTERP_COL     (2400, 2400, TD_LINEAR,  palette[1], 0xffffffff, 0x00ffffff),
+	TD_SET_BOOL       (overlay_clip, false),
 	
-	// Show the shimmer effect.
-	TD_SHOW_TEXT   ("Sample text"),
-	TD_SET_INT     (to_draw,    TD_DRAW_SHIMMER),
-	TD_SET_BOOL    (use_background, false),
-	TD_INTERP_FLOAT(   0,  500, TD_EASE_OUT, buffer_scaling, 0.00001, 1),
-	TD_INTERP_FLOAT( 500,  500, TD_EASE,     angle_1, M_PI*0.5, 0),
-	TD_INTERP_FLOAT(1500, 1500, TD_EASE,     angle_0, 0, 1),
-	// Fade away the yelloughw.
-	TD_SET_BOOL    (use_background, true),
-	TD_INTERP_FLOAT(   0,  500, TD_EASE_OUT, buffer_scaling, 1, 0.00001),
-	TD_INTERP_COL  ( 500,  500, TD_EASE,     background_color, 0xffff0000, 0xff000000),
+	// TODO: Insert animation.
 	
-	// Draw funny arcs and curves.
-	TD_SHOW_TEXT   ("Better graphics"),
-	TD_SET_INT     (to_draw,    TD_DRAW_CURVES),
-	TD_SET_FLOAT   (buffer_scaling, 1),
-	TD_SET_FLOAT   (angle_0,        0),
-	TD_SET_FLOAT   (angle_4,        0),
-	TD_INTERP_FLOAT(   0, 4500, TD_EASE,     angle_2, 0, M_PI * 0.5),
-	TD_INTERP_FLOAT(   0, 3000, TD_EASE,     angle_3, 0, 1),
-	TD_INTERP_FLOAT(1500, 1500, TD_EASE,     angle_1, 0, 1),
-	TD_INTERP_FLOAT( 500,  500, TD_EASE,     angle_1, 1, 2),
-	TD_INTERP_FLOAT(1000, 1000, TD_EASE,     angle_1, 2, 3),
-	// Curves go away.
-	TD_INTERP_FLOAT(   0, 1500, TD_EASE,     angle_4, 0, 1),
-	TD_INTERP_FLOAT( 750,  750, TD_EASE,     angle_0, 0, 1),
-	TD_INTERP_FLOAT( 250,  250, TD_EASE,     angle_0, 1, 2),
-	TD_INTERP_FLOAT( 500,  500, TD_EASE,     angle_0, 2, 3),
-	
+	/* ==== APPLE SCENE ==== */
+	// Bosch spot.
+	TD_SET_SPONSOR    (SPON_BOSCH),
+	TD_INTERP_INT     (   0,  500, TD_EASE,     sponsor_alpha, 0, 255),
 	// Funny sensors.
-	TD_SHOW_TEXT   ("Sample text"),
-	TD_SET_INT     (to_draw,    TD_DRAW_NONE),
-	TD_INTERP_COL  ( 500,  500, TD_EASE_IN,  background_color, 0xff000000, 0xff00afff),
-	TD_SET_INT     (to_draw,    TD_DRAW_AERO),
-	// Test sponsor.
-	TD_SET_SPONSOR (SPON_TEMP),
-	TD_INTERP_INT  (   0, 1000, TD_EASE_OUT, sponsor_alpha, 0, 255),
-	// Scene.
-	TD_INTERP_FLOAT(1000, 1000, TD_EASE_OUT, angle_0, 0, 1),
-	TD_DELAY       (3500),
-	TD_INTERP_INT  (   0, 1000, TD_EASE_IN,  sponsor_alpha, 255, 0),
-	TD_INTERP_FLOAT(1000, 1000, TD_EASE_IN,  angle_0, 1, 0),
-	
-	// Become colors.
-	TD_SHOW_TEXT   ("Colorful"),
-	TD_SET_INT     (to_draw, TD_DRAW_NONE),
-	TD_INTERP_AHSV (2000, 2000, TD_EASE_IN,  background_color, 0xff8dffff, 0xffffffff),
-	TD_INTERP_AHSV (2000, 2000, TD_EASE_OUT, background_color, 0xff00ffff, 0xffff00ff),
+	TD_SHOW_DARK_TEXT ("Air quality sensor"),
+	TD_SET_INT        (to_draw,    TD_DRAW_AERO),
+	// Rotations.
+	TD_SET_FLOAT      (angle_0, 1),
+	TD_SET_FLOAT      (angle_3, 1.1),
+	TD_SET_FLOAT      (angle_4, -1.1),
+	TD_INTERP_FLOAT   (   0, 5500, TD_LINEAR,   angle_1, 0, 20),
+	TD_INTERP_FLOAT   (   0, 5500, TD_LINEAR,   angle_2, 0, 4 * M_PI),
+	// Wait a bit.
+	TD_DELAY          (3000),
+	// Apple falling in from the top.
+	TD_SHOW_DARK_TEXT ("Accelerometer sensor"),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE_OUT, angle_4, -1.1, 0),
+	// Birds passing by.
+	TD_INTERP_FLOAT   (1000, 2000, TD_LINEAR,   angle_3, 1.1, -1.1),
+	// End of sponsor spot.
+	TD_INTERP_INT     (1000,  500, TD_EASE,     sponsor_alpha, 255, 0),
 	
 	// Prerender the tickets thing.
-	TD_DRAW_TITLE  ("MCH2022",
-					"Get your tickets at\n"
-					"tickets.mch2022.org"),
+	TD_DRAW_TITLE     ("MCH2022",
+					   "Get your tickets at\n"
+					   "tickets.mch2022.org"),
 	// Draw the tickets thing.
-	TD_SET_INT     (palette[1], 0xffffffff),
 	TD_SET_BOOL    (overlay_clip, true),
-	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
+	TD_INTERP_COL  (   0, 1500, TD_LINEAR,  palette[0], 0x00ffffff, 0xff000000),
+	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[1], 0x00ffffff, 0xffffffff),
 	TD_DELAY       (5000),
 	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[0], 0xff000000, 0xffffffff),
 	
@@ -811,10 +835,11 @@ bool pax_techdemo_draw(size_t now) {
 	
 	// Draw the sponsor.
 	if (sponsor_alpha && sponsor_logo) {
-		pax_col_t col = pax_col_argb(sponsor_alpha, 255, 255, 255);
+		pax_col_t img_col  = pax_col_argb(sponsor_alpha, 255, 255, 255);
+		pax_col_t text_col = pax_col_lerp(sponsor_alpha, sponsor_col & 0x00ffffff, sponsor_col);
 		// Draw the logo.
 		pax_shade_rect(
-			buffer, col,
+			buffer, img_col,
 			&PAX_SHADER_TEXTURE(sponsor_logo), NULL,
 			sponsor_logo_x, sponsor_logo_y,
 			sponsor_logo->width, sponsor_logo->height
@@ -822,7 +847,7 @@ bool pax_techdemo_draw(size_t now) {
 		// Draw the text.
 		if (sponsor_text) {
 			pax_draw_text(
-				buffer, col,
+				buffer, text_col,
 				NULL, 18,
 				sponsor_text_x, sponsor_text_y,
 				sponsor_text
