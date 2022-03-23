@@ -64,40 +64,40 @@ typedef struct td_set td_set_t;
 typedef void (*td_func_t)(size_t planned_time, size_t planned_duration, void *args);
 
 struct td_event {
-    size_t     duration;
-    td_func_t  callback;
-    void      *callback_args;
+	size_t     duration;
+	td_func_t  callback;
+	void      *callback_args;
 };
 
 struct td_lerp {
-    td_lerp_t *prev;
-    td_lerp_t *next;
-    size_t     start;
-    size_t     end;
-    size_t     duration;
-    union {
-        int   *int_ptr;
-        float *float_ptr;
-    };
-    union {
-        int    int_from;
-        float  float_from;
-    };
-    union {
-        int    int_to;
-        float  float_to;
-    };
-    uint8_t    type;
-    uint8_t    timing;
+	td_lerp_t *prev;
+	td_lerp_t *next;
+	size_t     start;
+	size_t     end;
+	size_t     duration;
+	union {
+		int   *int_ptr;
+		float *float_ptr;
+	};
+	union {
+		int    int_from;
+		float  float_from;
+	};
+	union {
+		int    int_to;
+		float  float_to;
+	};
+	uint8_t    type;
+	uint8_t    timing;
 };
 
 struct td_set {
-    size_t       size;
-    void        *pointer;
-    union {
-        uint64_t value;
-        float    f_value;
-    };
+	size_t       size;
+	void        *pointer;
+	union {
+		uint64_t value;
+		float    f_value;
+	};
 };
 
 /* ============== functions =============== */
