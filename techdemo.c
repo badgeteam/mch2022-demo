@@ -362,7 +362,7 @@ static void td_prep_sponsor(size_t planned_time, size_t planned_duration, void *
 	sponsor_t *sponsor = &sponsors_arr[(size_t) args];
 	
 	// Decode the PNG.
-	pax_decode_png_buf(sponsor_logo, sponsor->logo, sponsor->logo_len, PAX_BUF_16_4444ARGB, CODEC_FLAG_OPTIMAL);
+	pax_decode_png_buf(sponsor_logo, sponsor->logo, sponsor->logo_len, PAX_BUF_32_8888ARGB, CODEC_FLAG_OPTIMAL);
 	// Place it in the bottom right corner.
 	sponsor_logo_x = buffer->width  - sponsor_logo->width;
 	sponsor_logo_y = buffer->height - sponsor_logo->height;
@@ -722,19 +722,27 @@ static td_event_t events[] = {
 	// End of sponsor spot.
 	TD_INTERP_INT     (1000,  500, TD_EASE,     sponsor_alpha, 255, 0),
 	
+	// Test other sponsors.
+	// TD_SET_SPONSOR    (SPON_RASB_PI),
+	// TD_DELAY          (1000),
+	// TD_SET_SPONSOR    (SPON_ESP),
+	// TD_DELAY          (1000),
+	// TD_SET_SPONSOR    (SPON_LATTICE),
+	// TD_DELAY          (1000),
+	
 	// Prerender the tickets thing.
 	TD_DRAW_TITLE     ("MCH2022",
 					   "Get your tickets at\n"
 					   "tickets.mch2022.org"),
 	// Draw the tickets thing.
-	TD_SET_BOOL    (overlay_clip, true),
-	TD_INTERP_COL  (   0, 1500, TD_LINEAR,  palette[0], 0x00ffffff, 0xff000000),
-	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[1], 0x00ffffff, 0xffffffff),
-	TD_DELAY       (5000),
-	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[0], 0xff000000, 0xffffffff),
+	TD_SET_BOOL       (overlay_clip, true),
+	TD_INTERP_COL     (   0, 1500, TD_LINEAR,  palette[0], 0x00ffffff, 0xff000000),
+	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[1], 0x00ffffff, 0xffffffff),
+	TD_DELAY          (5000),
+	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xff000000, 0xffffffff),
 	
 	// Mark the end.
-	TD_DELAY       (   0),
+	TD_DELAY          (   0),
 };
 static size_t n_events = sizeof(events) / sizeof(td_event_t);
 

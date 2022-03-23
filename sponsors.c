@@ -23,13 +23,13 @@
 // The array.
 sponsor_t sponsors_arr[] = {
 	// Temporary sponsor placeholder of.
-	DEFINE_SPONSOR(temp_logo, "Placeholder"),
+	DEFINE_SPONSOR(temp_logo,         "Placeholder"),
 	// Bosch.
-	DEFINE_SPONSOR(logo_bosch, "Bosch:\nBNO-055\nMBE-680"),
+	DEFINE_SPONSOR(logo_bosch,        "Bosch:\nBNO-055\nMBE-680"),
 	// Espressif.
-	DEFINE_SPONSOR(temp_logo, "Espressif:\nESP32 MCU"),
-	// Lattice (need logo image).
-	DEFINE_SPONSOR(temp_logo, "Lattice:\nICE40 UP5K"),
-	// Raspberry pi (need logo image).
-	DEFINE_SPONSOR(temp_logo, "Raspberry pi:\nRP2040 coprocessor"),
+	DEFINE_SPONSOR(logo_espressif,    "Espressif:\nESP32 MCU"),
+	// Lattice.
+	DEFINE_SPONSOR(logo_lattice,      "Lattice:\nICE40 UP5K"),
+	// Raspberry pi.
+	DEFINE_SPONSOR(logo_raspberry_pi, "Raspberry pi:\nRP2040\ncoprocessor"),
 };

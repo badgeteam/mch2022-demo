@@ -12,13 +12,13 @@ extern "C" {
 enum sponsors {
 	// Temporary sponsor placeholder of.
 	SPON_TEMP,
-	// Bosch (need logo image).
+	// Bosch.
 	SPON_BOSCH,
-	// Espressif (need logo image).
+	// Espressif.
 	SPON_ESP,
-	// Lattice (need logo image).
+	// Lattice.
 	SPON_LATTICE,
-	// Raspberry pi (need logo image).
+	// Raspberry pi.
 	SPON_RASB_PI,
 };
 
