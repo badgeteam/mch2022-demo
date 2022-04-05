@@ -388,6 +388,15 @@ static void td_set_str(size_t planned_time, size_t planned_duration, void *args)
 
 // Prepare the sponsor for showing.
 static void td_prep_sponsor(size_t planned_time, size_t planned_duration, void *args) {
+	if ((int) args == -1) {
+		// Clean up.
+		if (sponsor_logo) {
+			pax_buf_destroy(sponsor_logo);
+			free(sponsor_logo);
+		}
+		return;
+	}
+	
 	// Remove the existing logo image, if any.
 	if (sponsor_logo) {
 		pax_buf_destroy(sponsor_logo);
@@ -614,12 +623,74 @@ static void td_draw_aero() {
 	pax_pop_2d(buffer);
 }
 
+// Draws a gear with the given number of teeth.
+static void td_gear(pax_col_t color0, pax_col_t color1, int n_teeth, float big_teeth, float small_teeth, float hub_inner, float hub_outer) {
+	// Prepare the points.
+	small_teeth = big_teeth - small_teeth;
+	int threshold   = 4;
+	int multiplier  = 8;
+	size_t n_points = n_teeth * multiplier + 1;
+	pax_vec1_t points[n_points];
+	pax_vec1_t teeth [n_points];
+	pax_vectorise_circle(points, n_points, 0, 0, 1);
+	
+	// COMPUTE something.
+	for (int i = 0; i < n_points; i++) {
+		// Tooth scale.
+		if ((i % multiplier) < threshold) {
+			// Big teeth.
+			teeth[i].x = points[i].x * big_teeth;
+			teeth[i].y = points[i].y * big_teeth;
+		} else {
+			// Small teeth.
+			teeth[i].x = points[i].x * small_teeth;
+			teeth[i].y = points[i].y * small_teeth;
+		}
+		
+	}
+	
+	// DRAW something.
+	for (int i = 0; i < n_points - 1; i++) {
+		// Hub.
+		pax_draw_tri(
+			buffer, color1,
+			points[i].x   * hub_outer, points[i].y   * hub_outer,
+			points[i].x   * hub_inner, points[i].y   * hub_inner,
+			points[i+1].x * hub_inner, points[i+1].y * hub_inner
+		);
+		pax_draw_tri(
+			buffer, color1,
+			points[i].x   * hub_outer, points[i].y   * hub_outer,
+			points[i+1].x * hub_inner, points[i+1].y * hub_inner,
+			points[i+1].x * hub_outer, points[i+1].y * hub_outer
+		);
+		// Teeth.
+		pax_draw_tri(
+			buffer, color0,
+			points[i].x * hub_outer,   points[i].y * hub_outer,
+			teeth [i].x,               teeth [i].y,
+			teeth [i+1].x,             teeth [i+1].y
+		);
+		pax_draw_tri(
+			buffer, color0,
+			points[i].x * hub_outer,   points[i].y * hub_outer,
+			teeth [i+1].x,             teeth [i+1].y,
+			points[i+1].x * hub_outer, points[i+1].y * hub_outer
+		);
+	}
+}
+
 // The rainbowtastical scene.
 // Parameters:
 //   angle_0: Rainbow size.
 //   angle_1: Fade to gears.
 //   angle_2: Gear angle.
 static void td_draw_rainbow() {
+	static float last_radius = 0;
+	if (angle_0 < 0.01) {
+		last_radius = 0;
+	}
+	
 	int max_dist = width * width * 0.25 + height * height;
 	if (angle_1 == 0) {
 		// Prepare the shader.
@@ -630,15 +701,31 @@ static void td_draw_rainbow() {
 			.alpha_promise_255 = true
 		};
 		
+		// Make some OPTIMISED POINTS.
+		const size_t n_points = 32;
+		pax_vec1_t points[n_points];
+		pax_vectorise_arc(points, n_points, 0, 0, 1, 0, M_PI * 2);
+		
 		// Draw the rainbow.
+		pax_push_2d(buffer);
+		pax_apply_2d(buffer, matrix_2d_translate(width * 0.5, height));
 		float radius = sqrt(max_dist) * angle_0;
-		pax_shade_arc(
-			buffer, -1,
-			&shader, NULL,
-			width * 0.5, height,
-			radius, 0, M_PI
-		);
+		for (int i = 0; i < n_points - 1; i ++) {
+			pax_shade_tri(
+				buffer, -1, &shader, NULL,
+				points[i].x   * last_radius, points[i].y   * last_radius,
+				points[i].x   * radius,      points[i].y   * radius,
+				points[i+1].x * last_radius, points[i+1].y * last_radius
+			);
+			pax_shade_tri(
+				buffer, -1, &shader, NULL,
+				points[i+1].x * radius,      points[i+1].y * radius,
+				points[i].x   * radius,      points[i].y   * radius,
+				points[i+1].x * last_radius, points[i+1].y * last_radius
+			);
+		}
 	}
+	last_radius = angle_0 - 0.02;
 	
 	// Transition to background color thingy.
 	if (angle_1 > 0 && angle_1 < 1) {
@@ -648,6 +735,44 @@ static void td_draw_rainbow() {
 			width * 0.5, height,
 			radius, 0, M_PI
 		);
+	}
+	
+	// APPEAR GEAR.
+	if (angle_1 > 0.5) {
+		// I'd like some colors please!
+		uint8_t alpha = (angle_1-0.5)*511;
+		pax_col_t color0 = alpha << 24 | 0x7f7f7f;
+		pax_col_t color1 = alpha << 24 | 0x3f3f3f;
+		
+		float hub_inner = 10;
+		float hub_outer = 20;
+		float gear_depth = 10;
+		
+		// Draw some FANTASTICAL gear.
+		pax_push_2d(buffer);
+		pax_apply_2d(buffer, matrix_2d_translate(width*0.5, height*0.5));
+		
+		// Center gear.
+		pax_push_2d(buffer);
+			pax_apply_2d(buffer, matrix_2d_rotate(angle_2));
+			td_gear(color0, color1, 6, 50, gear_depth, hub_inner, hub_outer);
+		pax_pop_2d(buffer);
+		
+		// Left gear.
+		pax_push_2d(buffer);
+			pax_apply_2d(buffer, matrix_2d_translate(-106, 0));
+			pax_apply_2d(buffer, matrix_2d_rotate(angle_2*-6/8));
+			td_gear(color0, color1, 8, 66, gear_depth, hub_inner, hub_outer);
+		pax_pop_2d(buffer);
+		
+		// Right gear.
+		pax_push_2d(buffer);
+			pax_apply_2d(buffer, matrix_2d_translate(106, 0));
+			pax_apply_2d(buffer, matrix_2d_rotate(angle_2*-6/7));
+			td_gear(color0, color1, 7, 58, gear_depth, hub_inner, hub_outer);
+		pax_pop_2d(buffer);
+		
+		pax_pop_2d(buffer);
 	}
 }
 
@@ -762,6 +887,7 @@ static td_event_t events[] = {
 					   "Friday, 22 July, 2022\n"
 					   "Zeewolde, Netherlands"),
 	
+	/* ==== INTRO ANIMaTION ==== */
 	// Fade out a cutout.
 	TD_SET_INT        (background_color, 0xffbdefef),
 	TD_SET_INT        (to_draw,    TD_DRAW_NONE),
@@ -773,35 +899,32 @@ static td_event_t events[] = {
 	// TODO: Insert animation.
 	
 	// Spon test.
-	TD_SET_INT        (sponsor_alpha, 255),
-	TD_SET_SPONSOR    (SPON_RASB_PI),
-	TD_DELAY          (1000),
-	TD_SET_SPONSOR    (SPON_LATTICE),
-	TD_DELAY          (1000),
-	TD_SET_SPONSOR    (SPON_ESP),
-	TD_DELAY          (1000),
-	TD_SET_SPONSOR    (SPON_BOSCH),
-	TD_DELAY          (1000),
-	TD_SET_INT        (sponsor_alpha, 0),
+	// TD_SET_INT        (sponsor_alpha, 255),
+	// TD_SET_SPONSOR    (SPON_RASB_PI),
+	// TD_DELAY          (1000),
+	// TD_SET_SPONSOR    (SPON_LATTICE),
+	// TD_DELAY          (1000),
+	// TD_SET_SPONSOR    (SPON_ESP),
+	// TD_DELAY          (1000),
+	// TD_SET_SPONSOR    (SPON_BOSCH),
+	// TD_DELAY          (1000),
+	// TD_SET_INT        (sponsor_alpha, 0),
+	// TD_DELAY          (1000),
 	
 	/* ==== APPLE SCENE ==== */
 	// Bosch spot.
 	TD_SET_SPONSOR    (SPON_BOSCH),
-	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 0, 255),
+	TD_INTERP_INT     (1000,  500, TD_LINEAR,   sponsor_alpha, 0, 255),
 	// Funny sensors.
-	TD_SHOW_DARK_TEXT ("Air quality sensor"),
 	TD_SET_INT        (to_draw,    TD_DRAW_AERO),
 	// Rotations.
 	TD_SET_FLOAT      (angle_0, 1),
 	TD_SET_FLOAT      (angle_3, 1.1),
 	TD_SET_FLOAT      (angle_4, -1.1),
 	TD_SET_FLOAT      (angle_5, -0.25),
-	// Wait a bit.
-	TD_DELAY          (3000),
 	TD_INTERP_FLOAT   (   0, 2500, TD_LINEAR,   angle_1, 0, 10),
 	TD_INTERP_FLOAT   (   0, 3500, TD_LINEAR,   angle_2, 0, 4 * M_PI),
 	// Apple falling in from the top.
-	TD_SHOW_DARK_TEXT ("Accelerometer sensor"),
 	TD_INTERP_FLOAT   ( 500,  500, TD_EASE_OUT, angle_4, -1.1, 0),
 	// Birds passing by.
 	TD_INTERP_FLOAT   (1000, 2000, TD_LINEAR,   angle_3, 1.1, -1.1),
@@ -811,7 +934,7 @@ static td_event_t events[] = {
 	TD_INTERP_FLOAT   ( 500, 1000, TD_EASE_IN,  angle_4, 0, 0.45),
 	TD_INTERP_FLOAT   ( 500,  500, TD_EASE_IN,  angle_5, -0.25, 0),
 	
-	/* ==== EXPLOSION SCENE ==== */
+	/* ==== RAINBOW GEARS OF SCENE ==== */
 	TD_SET_INT        (to_draw,    TD_DRAW_RAINBOW),
 	// Expand the rainbow.
 	TD_SET_FLOAT      (angle_0, 0),
@@ -819,18 +942,31 @@ static td_event_t events[] = {
 	TD_SET_FLOAT      (angle_2, 0),
 	TD_INTERP_COL     (   0,  500, TD_EASE_OUT, background_color, 0xffbdefef, 0xff000000),
 	TD_INTERP_FLOAT   ( 500, 1000, TD_EASE_OUT, angle_0, 0, 1),
-	// Append sponsor.
+	// Espressif spot.
 	TD_SET_SPONSOR    (SPON_ESP),
 	TD_INTERP_INT     ( 500,  500, TD_LINEAR,   sponsor_alpha, 0, 255),
 	// Fade to GEAR.
 	TD_SET_BOOL       (use_background, false),
-	TD_INTERP_FLOAT   (   0, 3000, TD_LINEAR,   angle_2, 0, M_PI * 2),
+	TD_INTERP_FLOAT   (   0, 6000, TD_LINEAR,   angle_2, 0, M_PI * 2),
 	TD_INTERP_FLOAT   (1000, 1000, TD_LINEAR,   angle_1, 0, 1),
 	TD_SET_INT        (background_color, 0xff00ff00),
 	TD_SET_BOOL       (use_background, true),
-	
 	TD_DELAY          (1000),
+	// End of sponsor spot.
+	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 255, 0),
+	// ZOOM IN.
+	TD_INTERP_FLOAT   (   0, 1000, TD_EASE_IN,  buffer_scaling, 1, 20),
+	TD_INTERP_AHSV    (1000, 1000, TD_LINEAR,   background_color, 0xff55ffff, 0xffaaffff),
+	TD_SET_INT        (to_draw, TD_DRAW_NONE),
+	TD_SET_FLOAT      (buffer_scaling, 1),
 	
+	/* ==== ??? ====*/
+	
+	/* ==== CIRCUIT SCENE ==== */
+	
+	/* ==== END OF THE DEMO ==== */
+	// No more sponsors.
+	TD_SET_SPONSOR    (-1),
 	// Prerender the tickets thing.
 	TD_DRAW_TITLE     ("MCH2022",
 					   "Get your tickets at\n"
