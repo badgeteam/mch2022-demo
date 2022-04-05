@@ -234,6 +234,41 @@ pax_col_t td_shader_shimmer(pax_col_t tint, int x, int y, float u, float v, void
 	}
 }
 
+// Some RAINBOW CONSTANTS.
+static const size_t rainbow_segments = 8;
+static const float  rainbow_sqrdist[] = {
+	0.125 * 0.125,
+	0.250 * 0.250,
+	0.375 * 0.375,
+	0.500 * 0.500,
+	0.625 * 0.625,
+	0.750 * 0.750,
+	0.875 * 0.875,
+	1.000 * 1.000,
+};
+static const pax_col_t rainbow_color[] = {
+	0xffff0000,
+	0xffff7f00,
+	0xffffff00,
+	0xff00ff00,
+	0xff00ffff,
+	0xff0000ff,
+	0xffff00ff,
+	0xffff0000,
+};
+
+// A RAINBOW EXPLOSION shader.
+pax_col_t td_shader_rainbow(pax_col_t tint, int x, int y, float u, float v, void *args) {
+	int maxDist = (int) args;
+	x -= width / 2;
+	y -= height;
+	float dist  = (x*x + y*y) / (float) maxDist;
+	for (int i = 0; i < rainbow_segments; i++) {
+		if (dist < rainbow_sqrdist[i]) return rainbow_color[i];
+	}
+	return 0xff000000;
+}
+
 /* ============== functions =============== */
 
 // Draws some title text on the clip buffer.
@@ -363,16 +398,16 @@ static void td_prep_sponsor(size_t planned_time, size_t planned_duration, void *
 	
 	// Decode the PNG.
 	pax_decode_png_buf(sponsor_logo, sponsor->logo, sponsor->logo_len, PAX_BUF_32_8888ARGB, CODEC_FLAG_OPTIMAL);
-	// Place it in the bottom right corner.
+	// Place it in the top right corner.
 	sponsor_logo_x = buffer->width  - sponsor_logo->width;
-	sponsor_logo_y = buffer->height - sponsor_logo->height;
+	sponsor_logo_y = 0;
 	
 	// Is there text?
 	sponsor_text = sponsor->text;
 	if (sponsor_text) {
-		// Then place it alongside the logo.
+		// Then place it in the buttom right corner.
 		pax_vec1_t size = pax_text_size(PAX_FONT_DEFAULT, 18, sponsor_text);
-		sponsor_text_x = sponsor_logo_x - size.x;
+		sponsor_text_x = buffer->width - size.x;
 		sponsor_text_y = buffer->height - size.y;
 	}
 }
@@ -524,8 +559,9 @@ static void td_bird(pax_col_t color, float flap_angle, float random_offset) {
 //   angle_0: opacity
 //   angle_1: birds flapping wings
 //   angle_2: apple rotation
-//   angle_3: birds Y (relative to buffer size)
-//   angle_4: apple Y (relative to buffer size)
+//   angle_3: birds Y (0 is center, relative to buffer size)
+//   angle_4: apple Y (0 is center, relative to buffer size)
+//   angle_5: apple X (0 is center, relative to buffer size)
 static void td_draw_aero() {
 	// A falling apple scene.
 	pax_col_t sky_color   = 0xffbdefef;
@@ -564,7 +600,7 @@ static void td_draw_aero() {
 	// Draw the apple.
 	pax_push_2d(buffer);
 	// Place of the apple.
-	pax_apply_2d(buffer, matrix_2d_translate(buffer->width * 0.25, buffer->height * (0.5 + angle_4)));
+	pax_apply_2d(buffer, matrix_2d_translate(buffer->width * (0.5 + angle_5), buffer->height * (0.5 + angle_4)));
 	// Make it wobble very slightly.
 	pax_apply_2d(buffer, matrix_2d_translate(cos(angle_2 * 0.125 * M_PI) * 15, sin(angle_2 * 0.25 * M_PI) * 10));
 	// Rotate it progressively.
@@ -576,6 +612,43 @@ static void td_draw_aero() {
 	pax_draw_tri(buffer, stem_color, 0.8, 0, 1.5, 0, 1.5, 0.3);
 	
 	pax_pop_2d(buffer);
+}
+
+// The rainbowtastical scene.
+// Parameters:
+//   angle_0: Rainbow size.
+//   angle_1: Fade to gears.
+//   angle_2: Gear angle.
+static void td_draw_rainbow() {
+	int max_dist = width * width * 0.25 + height * height;
+	if (angle_1 == 0) {
+		// Prepare the shader.
+		const pax_shader_t shader = {
+			.callback          = &td_shader_rainbow,
+			.callback_args     = (void *) max_dist,
+			.alpha_promise_0   = false,
+			.alpha_promise_255 = true
+		};
+		
+		// Draw the rainbow.
+		float radius = sqrt(max_dist) * angle_0;
+		pax_shade_arc(
+			buffer, -1,
+			&shader, NULL,
+			width * 0.5, height,
+			radius, 0, M_PI
+		);
+	}
+	
+	// Transition to background color thingy.
+	if (angle_1 > 0 && angle_1 < 1) {
+		float radius = sqrt(max_dist) * angle_1;
+		pax_draw_arc(
+			buffer, 0xff00ff00,
+			width * 0.5, height,
+			radius, 0, M_PI
+		);
+	}
 }
 
 /* ============= choreography ============= */
@@ -699,10 +772,22 @@ static td_event_t events[] = {
 	
 	// TODO: Insert animation.
 	
+	// Spon test.
+	TD_SET_INT        (sponsor_alpha, 255),
+	TD_SET_SPONSOR    (SPON_RASB_PI),
+	TD_DELAY          (1000),
+	TD_SET_SPONSOR    (SPON_LATTICE),
+	TD_DELAY          (1000),
+	TD_SET_SPONSOR    (SPON_ESP),
+	TD_DELAY          (1000),
+	TD_SET_SPONSOR    (SPON_BOSCH),
+	TD_DELAY          (1000),
+	TD_SET_INT        (sponsor_alpha, 0),
+	
 	/* ==== APPLE SCENE ==== */
 	// Bosch spot.
 	TD_SET_SPONSOR    (SPON_BOSCH),
-	TD_INTERP_INT     (   0,  500, TD_EASE,     sponsor_alpha, 0, 255),
+	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 0, 255),
 	// Funny sensors.
 	TD_SHOW_DARK_TEXT ("Air quality sensor"),
 	TD_SET_INT        (to_draw,    TD_DRAW_AERO),
@@ -710,25 +795,41 @@ static td_event_t events[] = {
 	TD_SET_FLOAT      (angle_0, 1),
 	TD_SET_FLOAT      (angle_3, 1.1),
 	TD_SET_FLOAT      (angle_4, -1.1),
-	TD_INTERP_FLOAT   (   0, 5500, TD_LINEAR,   angle_1, 0, 20),
-	TD_INTERP_FLOAT   (   0, 5500, TD_LINEAR,   angle_2, 0, 4 * M_PI),
+	TD_SET_FLOAT      (angle_5, -0.25),
 	// Wait a bit.
 	TD_DELAY          (3000),
+	TD_INTERP_FLOAT   (   0, 2500, TD_LINEAR,   angle_1, 0, 10),
+	TD_INTERP_FLOAT   (   0, 3500, TD_LINEAR,   angle_2, 0, 4 * M_PI),
 	// Apple falling in from the top.
 	TD_SHOW_DARK_TEXT ("Accelerometer sensor"),
 	TD_INTERP_FLOAT   ( 500,  500, TD_EASE_OUT, angle_4, -1.1, 0),
 	// Birds passing by.
 	TD_INTERP_FLOAT   (1000, 2000, TD_LINEAR,   angle_3, 1.1, -1.1),
 	// End of sponsor spot.
-	TD_INTERP_INT     (1000,  500, TD_EASE,     sponsor_alpha, 255, 0),
+	TD_INTERP_INT     (1000,  500, TD_LINEAR,   sponsor_alpha, 255, 0),
+	// Make the apple HIT THE GROUND.
+	TD_INTERP_FLOAT   ( 500, 1000, TD_EASE_IN,  angle_4, 0, 0.45),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE_IN,  angle_5, -0.25, 0),
 	
-	// Test other sponsors.
-	// TD_SET_SPONSOR    (SPON_RASB_PI),
-	// TD_DELAY          (1000),
-	// TD_SET_SPONSOR    (SPON_ESP),
-	// TD_DELAY          (1000),
-	// TD_SET_SPONSOR    (SPON_LATTICE),
-	// TD_DELAY          (1000),
+	/* ==== EXPLOSION SCENE ==== */
+	TD_SET_INT        (to_draw,    TD_DRAW_RAINBOW),
+	// Expand the rainbow.
+	TD_SET_FLOAT      (angle_0, 0),
+	TD_SET_FLOAT      (angle_1, 0),
+	TD_SET_FLOAT      (angle_2, 0),
+	TD_INTERP_COL     (   0,  500, TD_EASE_OUT, background_color, 0xffbdefef, 0xff000000),
+	TD_INTERP_FLOAT   ( 500, 1000, TD_EASE_OUT, angle_0, 0, 1),
+	// Append sponsor.
+	TD_SET_SPONSOR    (SPON_ESP),
+	TD_INTERP_INT     ( 500,  500, TD_LINEAR,   sponsor_alpha, 0, 255),
+	// Fade to GEAR.
+	TD_SET_BOOL       (use_background, false),
+	TD_INTERP_FLOAT   (   0, 3000, TD_LINEAR,   angle_2, 0, M_PI * 2),
+	TD_INTERP_FLOAT   (1000, 1000, TD_LINEAR,   angle_1, 0, 1),
+	TD_SET_INT        (background_color, 0xff00ff00),
+	TD_SET_BOOL       (use_background, true),
+	
+	TD_DELAY          (1000),
 	
 	// Prerender the tickets thing.
 	TD_DRAW_TITLE     ("MCH2022",
@@ -799,8 +900,10 @@ bool pax_techdemo_draw(size_t now) {
 		lerp = lerp->next;
 	}
 	
-	// Use the dirty window to save resources.
-	pax_background(buffer, background_color);
+	if (use_background) {
+		// Fill the background.
+		pax_background(buffer, background_color);
+	}
 	
 	pax_reset_2d(buffer, PAX_RESET_TOP);
 	pax_push_2d(buffer);
@@ -822,6 +925,9 @@ bool pax_techdemo_draw(size_t now) {
 			break;
 		case TD_DRAW_AERO:
 			td_draw_aero();
+			break;
+		case TD_DRAW_RAINBOW:
+			td_draw_rainbow();
 			break;
 	}
 	

@@ -11,6 +11,8 @@
 // Temporary sponsor placeholder of.
 #include "images/temp_logo.c"
 
+// Max. image size: 200x50.
+
 // Bosch logo.
 #include "images/logo/bosch.c"
 // Espressif logo.
@@ -25,11 +27,11 @@ sponsor_t sponsors_arr[] = {
 	// Temporary sponsor placeholder of.
 	DEFINE_SPONSOR(temp_logo,         "Placeholder"),
 	// Bosch.
-	DEFINE_SPONSOR(logo_bosch,        "Bosch:\nBNO-055\nMBE-680"),
+	DEFINE_SPONSOR(logo_bosch,        "Bosch:\nBNO 055\nBME 680"),
 	// Espressif.
-	DEFINE_SPONSOR(logo_espressif,    "Espressif:\nESP32 MCU"),
+	DEFINE_SPONSOR(logo_espressif,    "Espressif:\nESP32\nmain CPU"),
 	// Lattice.
-	DEFINE_SPONSOR(logo_lattice,      "Lattice:\nICE40 UP5K"),
+	DEFINE_SPONSOR(logo_lattice,      "Lattice:\nICE40 UP5K\nFPGA"),
 	// Raspberry pi.
 	DEFINE_SPONSOR(logo_raspberry_pi, "Raspberry pi:\nRP2040\ncoprocessor"),
 };
