@@ -13,6 +13,8 @@
 
 // Max. image size: 200x50.
 
+// Allnet logo.
+#include "images/logo/allnet.c"
 // Bosch logo.
 #include "images/logo/bosch.c"
 // Espressif logo.
@@ -26,10 +28,12 @@
 sponsor_t sponsors_arr[] = {
 	// Temporary sponsor placeholder of.
 	DEFINE_SPONSOR(temp_logo,         "Placeholder"),
+	// Allnet.
+	DEFINE_SPONSOR(logo_allnet,       "Production partner"),
 	// Bosch.
 	DEFINE_SPONSOR(logo_bosch,        "Sensors:\nBNO055\nBME680"),
 	// Espressif.
-	DEFINE_SPONSOR(logo_espressif,    "Main CPU:\nESP32"),
+	DEFINE_SPONSOR(logo_espressif,    "Main CPU: ESP32\nMemory: PSRAM"),
 	// Lattice.
 	DEFINE_SPONSOR(logo_lattice,      "FPGA:\nICE40UP5K"),
 	// Raspberry pi.

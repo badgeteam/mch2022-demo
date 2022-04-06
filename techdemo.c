@@ -393,6 +393,7 @@ static void td_prep_sponsor(size_t planned_time, size_t planned_duration, void *
 		if (sponsor_logo) {
 			pax_buf_destroy(sponsor_logo);
 			free(sponsor_logo);
+			sponsor_logo = NULL;
 		}
 		return;
 	}
@@ -680,6 +681,8 @@ static void td_gear(pax_col_t color0, pax_col_t color1, int n_teeth, float big_t
 	}
 }
 
+/* ==== Now i'm just making stuff up ==== */
+
 // The rainbowtastical scene.
 // Parameters:
 //   angle_0: Rainbow size.
@@ -900,13 +903,15 @@ static td_event_t events[] = {
 	
 	// Spon test.
 	// TD_SET_INT        (sponsor_alpha, 255),
-	// TD_SET_SPONSOR    (SPON_RASB_PI),
+	// TD_SET_SPONSOR    (SPON_ALLNET),
 	// TD_DELAY          (1000),
 	// TD_SET_SPONSOR    (SPON_LATTICE),
 	// TD_DELAY          (1000),
 	// TD_SET_SPONSOR    (SPON_ESP),
 	// TD_DELAY          (1000),
 	// TD_SET_SPONSOR    (SPON_BOSCH),
+	// TD_DELAY          (1000),
+	// TD_SET_SPONSOR    (SPON_RASB_PI),
 	// TD_DELAY          (1000),
 	// TD_SET_INT        (sponsor_alpha, 0),
 	// TD_DELAY          (1000),
@@ -922,12 +927,12 @@ static td_event_t events[] = {
 	TD_SET_FLOAT      (angle_3, 1.1),
 	TD_SET_FLOAT      (angle_4, -1.1),
 	TD_SET_FLOAT      (angle_5, -0.25),
-	TD_INTERP_FLOAT   (   0, 2500, TD_LINEAR,   angle_1, 0, 10),
-	TD_INTERP_FLOAT   (   0, 3500, TD_LINEAR,   angle_2, 0, 4 * M_PI),
+	TD_INTERP_FLOAT   (   0, 3500, TD_LINEAR,   angle_1, 0, 10),
+	TD_INTERP_FLOAT   (   0, 4500, TD_LINEAR,   angle_2, 0, 4 * M_PI),
 	// Apple falling in from the top.
 	TD_INTERP_FLOAT   ( 500,  500, TD_EASE_OUT, angle_4, -1.1, 0),
 	// Birds passing by.
-	TD_INTERP_FLOAT   (1000, 2000, TD_LINEAR,   angle_3, 1.1, -1.1),
+	TD_INTERP_FLOAT   (2000, 2000, TD_LINEAR,   angle_3, 1.1, -1.1),
 	// End of sponsor spot.
 	TD_INTERP_INT     (1000,  500, TD_LINEAR,   sponsor_alpha, 255, 0),
 	// Make the apple HIT THE GROUND.
@@ -947,11 +952,11 @@ static td_event_t events[] = {
 	TD_INTERP_INT     ( 500,  500, TD_LINEAR,   sponsor_alpha, 0, 255),
 	// Fade to GEAR.
 	TD_SET_BOOL       (use_background, false),
-	TD_INTERP_FLOAT   (   0, 6000, TD_LINEAR,   angle_2, 0, M_PI * 2),
+	TD_INTERP_FLOAT   (   0, 7000, TD_LINEAR,   angle_2, 0, M_PI * 2),
 	TD_INTERP_FLOAT   (1000, 1000, TD_LINEAR,   angle_1, 0, 1),
 	TD_SET_INT        (background_color, 0xff00ff00),
 	TD_SET_BOOL       (use_background, true),
-	TD_DELAY          (1000),
+	TD_DELAY          (2000),
 	// End of sponsor spot.
 	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 255, 0),
 	// ZOOM IN.
@@ -960,7 +965,7 @@ static td_event_t events[] = {
 	TD_SET_INT        (to_draw, TD_DRAW_NONE),
 	TD_SET_FLOAT      (buffer_scaling, 1),
 	
-	/* ==== ??? ====*/
+	/* ==== ??? ==== */
 	
 	/* ==== CIRCUIT SCENE ==== */
 	

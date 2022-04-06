@@ -12,6 +12,8 @@ extern "C" {
 enum sponsors {
 	// Temporary sponsor placeholder of.
 	SPON_TEMP,
+	// Allnet.
+	SPON_ALLNET,
 	// Bosch.
 	SPON_BOSCH,
 	// Espressif.
