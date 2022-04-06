@@ -1,0 +1,6 @@
+badge sponsors:
+Allnet (production)
+Espressif (ESP32 + PSRAM)
+Lattice (FPGA)
+Bosch (air + position sensors)
+Raspberry Pi Foundation (RP2040 microcontroller)
