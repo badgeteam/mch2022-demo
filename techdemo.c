@@ -779,6 +779,28 @@ static void td_draw_rainbow() {
 	}
 }
 
+/* ==== Cirsuit? Thingy? ==== */
+
+// Circuit! Thingy!
+static void td_draw_circuit() {
+	pax_vec1_t points[] = {
+		{ .x = 0.000, .y = 0.000 },
+		{ .x = 0.500, .y = 0.500 },
+		{ .x = 0.500, .y = 0.000 },
+		{ .x = 1.000, .y = 0.000 },
+		{ .x = 1.000, .y = 1.000 },
+		{ .x = 0.000, .y = 1.000 },
+		{ .x = 0.000, .y = 0.500 },
+	};
+	size_t n_points = sizeof(points) / sizeof(pax_vec1_t);
+	
+	pax_apply_2d(buffer, matrix_2d_translate(width/2, height/2));
+	pax_apply_2d(buffer, matrix_2d_scale(200, 200));
+	pax_apply_2d(buffer, matrix_2d_translate(-0.5, -0.5));
+	
+	pax_outline_shape_part(buffer, -1, n_points, points, 0, angle_0);
+}
+
 /* ============= choreography ============= */
 /*
 	Goal:
@@ -890,7 +912,7 @@ static td_event_t events[] = {
 					   "Friday, 22 July, 2022\n"
 					   "Zeewolde, Netherlands"),
 	
-	/* ==== INTRO ANIMaTION ==== */
+	/* ==== INTRO ANIMATION ==== */
 	// Fade out a cutout.
 	TD_SET_INT        (background_color, 0xffbdefef),
 	TD_SET_INT        (to_draw,    TD_DRAW_NONE),
@@ -968,6 +990,9 @@ static td_event_t events[] = {
 	/* ==== ??? ==== */
 	
 	/* ==== CIRCUIT SCENE ==== */
+	TD_SET_INT        (to_draw, TD_DRAW_CIRCUIT),
+	TD_INTERP_FLOAT   (   0, 2000, TD_LINEAR,   angle_0, 0, 1),
+	TD_DELAY          (3000),
 	
 	/* ==== END OF THE DEMO ==== */
 	// No more sponsors.
@@ -1069,6 +1094,9 @@ bool pax_techdemo_draw(size_t now) {
 			break;
 		case TD_DRAW_RAINBOW:
 			td_draw_rainbow();
+			break;
+		case TD_DRAW_CIRCUIT:
+			td_draw_circuit();
 			break;
 	}
 	
