@@ -511,7 +511,7 @@ static void td_draw_curves() {
 		
 		pax_outline_arc(buffer, -1, x, y, r, a0, a1);
 		
-		pax_col_t stretch = pax_col_hsv(0, 0, bri);
+		pax_col_t stretch = pax_col_argb(bri, 255, 255, 255);
 		
 		pax_push_2d(buffer);
 		pax_apply_2d(buffer, matrix_2d_translate(x, y));
@@ -801,6 +801,63 @@ static void td_draw_circuit() {
 	pax_outline_shape_part(buffer, -1, n_points, points, 0, angle_0);
 }
 
+/* ==== Something about making the thing ==== */
+
+// BOX.
+static void td_box(bool cross, int alpha, float x, float y) {
+	pax_push_2d(buffer);
+	pax_apply_2d(buffer, matrix_2d_translate(x, y));
+	pax_apply_2d(buffer, matrix_2d_scale(50, 50));
+	pax_apply_2d(buffer, matrix_2d_translate(-0.5, 0));
+	
+	if (cross) {
+		// Plain red background.
+		pax_draw_rect(buffer, alpha|0xff0000, 0, -1, 1, 1);
+		// A yellow cross shape.
+		pax_draw_rect(buffer, alpha|0xffff00, 0, -0.7, 1, 0.4);
+		pax_draw_rect(buffer, alpha|0xffff00, 0.3, -1, 0.4, 1);
+	} else {
+		// I guess a blue box will do.
+		pax_draw_rect(buffer, alpha|0x0000ff, 0.25, -0.50, 0.50, 0.50);
+	}
+	
+	pax_pop_2d(buffer);
+}
+
+// Assembly line thing.
+// Parameters:
+//   angle_0: How far along the boxes move.
+//   angle_1: The press.
+//   angle_2: The alpha.
+static void td_draw_prod() {
+	float dx = width / 5.0;
+	uint32_t alpha = (int) (angle_2 * 0xff) << 24;
+	
+	pax_push_2d(buffer);
+	pax_apply_2d(buffer, matrix_2d_translate(dx * angle_0 + dx / 2, 0));
+		// Boxes before the press.
+		for (int i = 0; i < 3; i ++) {
+			td_box(false, alpha, dx * i - dx, 200);
+		}
+		// Boxes after the press.
+		for (int i = 0; i < 3; i ++) {
+			td_box(true, alpha, dx * i + dx * 2, 200);
+		}
+	pax_pop_2d(buffer);
+	
+	// The hiding device.
+	pax_draw_rect(buffer, alpha|0xafafaf, (width - dx)/2, 200-dx, dx, dx);
+	
+	// The press.
+	pax_push_2d(buffer);
+	pax_apply_2d(buffer, matrix_2d_translate(width/2, 200-dx*1.5+dx/2*angle_1));
+		// The plunger.
+		pax_draw_rect(buffer, alpha|0x7f3f3f, -dx/2, 0, dx, -dx/4);
+		// The rod.
+		pax_draw_rect(buffer, alpha|0x5f3f3f, -dx/4, -dx/4, dx/2, -height);
+	pax_pop_2d(buffer);
+}
+
 /* ============= choreography ============= */
 /*
 	Goal:
@@ -923,7 +980,7 @@ static td_event_t events[] = {
 	
 	// TODO: Insert animation.
 	
-	// Spon test.
+	// // Spon test.
 	// TD_SET_INT        (sponsor_alpha, 255),
 	// TD_SET_SPONSOR    (SPON_ALLNET),
 	// TD_DELAY          (1000),
@@ -974,7 +1031,7 @@ static td_event_t events[] = {
 	TD_INTERP_INT     ( 500,  500, TD_LINEAR,   sponsor_alpha, 0, 255),
 	// Fade to GEAR.
 	TD_SET_BOOL       (use_background, false),
-	TD_INTERP_FLOAT   (   0, 7000, TD_LINEAR,   angle_2, 0, M_PI * 2),
+	TD_INTERP_FLOAT   (   0, 4000, TD_LINEAR,   angle_2, 0, M_PI),
 	TD_INTERP_FLOAT   (1000, 1000, TD_LINEAR,   angle_1, 0, 1),
 	TD_SET_INT        (background_color, 0xff00ff00),
 	TD_SET_BOOL       (use_background, true),
@@ -987,12 +1044,70 @@ static td_event_t events[] = {
 	TD_SET_INT        (to_draw, TD_DRAW_NONE),
 	TD_SET_FLOAT      (buffer_scaling, 1),
 	
-	/* ==== ??? ==== */
+	/* ==== FPGA SCENE ==== */
+	// Lattice spot.
+	TD_SET_SPONSOR    (SPON_LATTICE),
+	TD_SET_INT        (sponsor_col, 0xffffffff),
+	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 0, 255),
+	// Draw funny arcs and curves.
+	TD_SET_INT        (to_draw,    TD_DRAW_CURVES),
+	TD_SET_FLOAT      (angle_0,        0),
+	TD_SET_FLOAT      (angle_4,        0),
+	TD_INTERP_FLOAT   (   0, 5500, TD_EASE,     angle_2, 0, M_PI * 0.5),
+	TD_INTERP_FLOAT   (   0, 3000, TD_EASE,     angle_3, 0, 1),
+	TD_INTERP_FLOAT   (1500, 1500, TD_EASE,     angle_1, 0, 1),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE,     angle_1, 1, 2),
+	TD_INTERP_FLOAT   (1000, 1000, TD_EASE,     angle_1, 2, 3),
+	// Wait for just a bit.
+	TD_DELAY          (1000),
+	// Curves go away.
+	TD_INTERP_FLOAT   (   0, 1500, TD_EASE,     angle_4, 0, 1),
+	TD_INTERP_FLOAT   ( 750,  750, TD_EASE,     angle_0, 0, 1),
+	TD_INTERP_FLOAT   ( 250,  250, TD_EASE,     angle_0, 1, 2),
+	// End of sponsor spot.
+	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 255, 0),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE,     angle_0, 2, 3),
 	
-	/* ==== CIRCUIT SCENE ==== */
-	TD_SET_INT        (to_draw, TD_DRAW_CIRCUIT),
-	TD_INTERP_FLOAT   (   0, 2000, TD_LINEAR,   angle_0, 0, 1),
-	TD_DELAY          (3000),
+	/* ==== PRODUCTION SCENE ==== */
+	// The box line.
+	TD_SET_FLOAT      (angle_0, 0),
+	TD_SET_FLOAT      (angle_1, 0),
+	TD_SET_INT        (to_draw,    TD_DRAW_PROD),
+	TD_INTERP_AHSV    (   0,  500, TD_LINEAR,   background_color, 0xffaaffff, 0xffaa007f),
+	TD_INTERP_FLOAT   ( 500,  500, TD_LINEAR,   angle_2, 0, 1),
+	// Allnet spot.
+	TD_SET_SPONSOR    (SPON_ALLNET),
+	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 0, 255),
+	TD_DELAY          (1000),
+	
+	// aADACSGDjebsddjrbfhvbhdsj
+	TD_SET_FLOAT      (angle_1, 1),
+	TD_DELAY          ( 250),
+	TD_INTERP_FLOAT   ( 250,  250, TD_EASE_OUT, angle_1, 1, 0),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE,     angle_0, 0, 1),
+	// aADACSGDjebsddjrbfhvbhdsj
+	TD_SET_FLOAT      (angle_1, 1),
+	TD_DELAY          ( 250),
+	TD_INTERP_FLOAT   ( 250,  250, TD_EASE_OUT, angle_1, 1, 0),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE,     angle_0, 0, 1),
+	// aADACSGDjebsddjrbfhvbhdsj
+	TD_SET_FLOAT      (angle_1, 1),
+	TD_DELAY          ( 250),
+	TD_INTERP_FLOAT   ( 250,  250, TD_EASE_OUT, angle_1, 1, 0),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE,     angle_0, 0, 1),
+	// aADACSGDjebsddjrbfhvbhdsj
+	TD_SET_FLOAT      (angle_1, 1),
+	TD_DELAY          ( 250),
+	TD_INTERP_FLOAT   ( 250,  250, TD_EASE_OUT, angle_1, 1, 0),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE,     angle_0, 0, 1),
+	// End of sponsor spot.
+	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 255, 0),
+	// aADACSGDjebsddjrbfhvbhdsj
+	TD_INTERP_FLOAT   (   0, 1000, TD_LINEAR,   angle_2, 1, 0),
+	TD_SET_FLOAT      (angle_1, 1),
+	TD_DELAY          ( 250),
+	TD_INTERP_FLOAT   ( 250,  250, TD_EASE_OUT, angle_1, 1, 0),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE,     angle_0, 0, 1),
 	
 	/* ==== END OF THE DEMO ==== */
 	// No more sponsors.
@@ -1097,6 +1212,9 @@ bool pax_techdemo_draw(size_t now) {
 			break;
 		case TD_DRAW_CIRCUIT:
 			td_draw_circuit();
+			break;
+		case TD_DRAW_PROD:
+			td_draw_prod();
 			break;
 	}
 	

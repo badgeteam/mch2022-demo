@@ -43,6 +43,7 @@ extern "C" {
 #define TD_DRAW_AERO    4
 #define TD_DRAW_RAINBOW 5
 #define TD_DRAW_CIRCUIT 6
+#define TD_DRAW_PROD    7
 
 #define TD_INTERP_TYPE_INT   0
 #define TD_INTERP_TYPE_COL   1
