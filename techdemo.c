@@ -263,10 +263,16 @@ pax_col_t td_shader_rainbow(pax_col_t tint, int x, int y, float u, float v, void
 	x -= width / 2;
 	y -= height;
 	float dist  = (x*x + y*y) / (float) maxDist;
+	
 	for (int i = 0; i < rainbow_segments; i++) {
-		if (dist < rainbow_sqrdist[i]) return rainbow_color[i];
+		if (dist < rainbow_sqrdist[i]) {
+			tint = rainbow_color[i];
+			goto end;
+		}
 	}
-	return 0xff000000;
+	
+	end:
+	return pax_col_lerp(angle_1*255, tint, 0xff00ff00);
 }
 
 /* ============== functions =============== */
@@ -732,12 +738,23 @@ static void td_draw_rainbow() {
 	
 	// Transition to background color thingy.
 	if (angle_1 > 0 && angle_1 < 1) {
-		float radius = sqrt(max_dist) * angle_1;
-		pax_draw_arc(
-			buffer, 0xff00ff00,
-			width * 0.5, height,
-			radius, 0, M_PI
+		const pax_shader_t shader = {
+			.callback          = &td_shader_rainbow,
+			.callback_args     = (void *) max_dist,
+			.alpha_promise_0   = false,
+			.alpha_promise_255 = true
+		};
+		pax_shade_rect(
+			buffer, 0,
+			&shader, NULL,
+			0, 0, width, height
 		);
+		// float radius = sqrt(max_dist) * angle_1;
+		// pax_draw_arc(
+		// 	buffer, 0xff00ff00,
+		// 	width * 0.5, height,
+		// 	radius, 0, M_PI
+		// );
 	}
 	
 	// APPEAR GEAR.
@@ -779,26 +796,69 @@ static void td_draw_rainbow() {
 	}
 }
 
-/* ==== Cirsuit? Thingy? ==== */
+/* ==== Post office scene ==== */
 
-// Circuit! Thingy!
-static void td_draw_circuit() {
-	pax_vec1_t points[] = {
-		{ .x = 0.000, .y = 0.000 },
-		{ .x = 0.500, .y = 0.500 },
-		{ .x = 0.500, .y = 0.000 },
-		{ .x = 1.000, .y = 0.000 },
-		{ .x = 1.000, .y = 1.000 },
-		{ .x = 0.000, .y = 1.000 },
-		{ .x = 0.000, .y = 0.500 },
-	};
-	size_t n_points = sizeof(points) / sizeof(pax_vec1_t);
+// Draws a letter.
+static void td_letter(float x, float y, float scale) {
+	// Letters have a weird size.
+	pax_push_2d (buffer);
+	pax_apply_2d(buffer, matrix_2d_translate(x, y));
+	pax_apply_2d(buffer, matrix_2d_scale(sqrtf(2), 1));
+	pax_apply_2d(buffer, matrix_2d_scale(scale, scale));
 	
-	pax_apply_2d(buffer, matrix_2d_translate(width/2, height/2));
-	pax_apply_2d(buffer, matrix_2d_scale(200, 200));
-	pax_apply_2d(buffer, matrix_2d_translate(-0.5, -0.5));
+	pax_col_t bg_col = 0xffffffff;
+	pax_col_t fg_col = 0xff7f7f7f;
 	
-	pax_outline_shape_part(buffer, -1, n_points, points, 0, angle_0);
+	// Background.
+	pax_draw_rect(buffer, bg_col, -0.5, -0.5, 1, 1);
+	// Outline.
+	pax_outline_rect(buffer, fg_col, -0.5, -0.5, 1, 1);
+	// Cut thingy.
+	pax_draw_line(buffer, fg_col, -0.5, -0.5, 0, 0);
+	pax_draw_line(buffer, fg_col, 0.5, -0.5, 0, 0);
+	
+	pax_pop_2d  (buffer);
+}
+
+// Draws a letter flying by at a specific angle at a specific time.
+static void td_flying_letter(float angle, float offset, float start, float end, float scale) {
+	// Compute stuff.
+	float max = scale * 4 + fmaxf(width, height);
+	float part = (angle_0 - start) / (end - start);
+	
+	// Something.
+	pax_push_2d (buffer);
+	pax_apply_2d(buffer, matrix_2d_translate(width / 2, height / 2));
+	pax_apply_2d(buffer, matrix_2d_rotate(angle));
+	pax_apply_2d(buffer, matrix_2d_translate(-max/2 + max*part, 0));
+	pax_apply_2d(buffer, matrix_2d_rotate(angle_1 + offset));
+	td_letter   (0, 0, scale);
+	pax_pop_2d  (buffer);
+}
+
+// Maybe flying letters?
+static void td_draw_post() {
+	// Just some chaos, nothing special.
+	td_flying_letter(2.3172995179137765, 0.9327325324906965, 0.6200310008051024, 0.8572794494729159, 48.86588953650229);
+	td_flying_letter(1.1905063070341015, 0.4183943088989168, 0.3240403988058697, 0.33705272363358596, 38.143095623541285);
+	td_flying_letter(2.169114933629167, 2.245400777697782, 0.6312957555365378, 0.7501916341097947, 36.55700488400967);
+	td_flying_letter(1.64015389484868, 3.0743381865998374, 0.14477321722782616, 0.20338671121329335, 38.419331703051235);
+	td_flying_letter(2.4754739774018657, 1.3762650634594125, 0.48545398736001416, 0.6335792065361739, 39.01610438918797);
+	td_flying_letter(1.1918462982962907, 0.9484799058593335, 0.607089712020574, 0.6499199346806023, 20.16319704689827);
+	td_flying_letter(2.927789411987766, 0.2602116233999743, 0.6605111997828027, 0.908105035819395, 43.07647581715252);
+	td_flying_letter(2.669121756551718, 0.8658407476366089, 0.13602316207365497, 0.41475671576240103, 39.05030845044536);
+	td_flying_letter(0.3159085771253503, 1.1458499048251523, 0.18580346689555993, 0.23224011824071963, 28.787298439990934);
+	td_flying_letter(2.7690272233484485, 2.300568705108835, 0.6446422896099403, 0.7422192872844627, 43.90241810798484);
+	td_flying_letter(0.2974841191836354, 2.512401470684956, 0.03609380030621033, 0.23686171231281655, 43.69030233338533);
+	td_flying_letter(2.113161103563894, 1.6288428612030033, 0.36056494296981667, 0.5132525117143615, 48.19278021461517);
+	td_flying_letter(2.527710507937092, 2.8875445512690936, 0.09757311583458078, 0.31201138286110786, 46.190837995313615);
+	td_flying_letter(2.05206268800383, 0.4667752847978764, 0.3753097843265101, 0.5276153455193775, 28.129515980212915);
+	td_flying_letter(1.0159652669510584, 1.807708514496489, 0.18895490288728967, 0.48657324052571327, 35.04562751011628);
+	td_flying_letter(1.2738686960698262, 0.12285897725133259, 0.287234101469115, 0.4865526518295369, 27.581135279138138);
+	td_flying_letter(0.05161149184345973, 2.9190484660345617, 0.015185080558591123, 0.0776748678921273, 38.0804602103465);
+	td_flying_letter(2.815681506060534, 1.8775014638544705, 0.6093510831545631, 0.6922654608510701, 20.050193387042746);
+	td_flying_letter(1.669315294457934, 1.5957309899439274, 0.13498914479436858, 0.3218088198513566, 20.865394026032426);
+	td_flying_letter(0.6829852529593806, 2.34909292707273, 0.09109951250640223, 0.20833267233162733, 21.905061643025615);
 }
 
 /* ==== Something about making the thing ==== */
@@ -963,18 +1023,29 @@ static void td_draw_prod() {
 		TD_SET_STR(str),\
 		TD_INTERP_COL(0, 2500, TD_EASE_IN, text_col, 0xff000000, 0x00000000)
 
-static td_event_t events[] = {
+static const td_event_t events[] = {
+	
+	/* ==== TITLE SEQUENCE ==== */
+	TD_SET_INT        (background_color, 0xffbdefef),
+	TD_SET_INT        (to_draw,    TD_DRAW_NONE),
 	// Prerender some text.
 	TD_DRAW_TITLE     ("MCH2022",
 					   "Friday, 22 July, 2022\n"
 					   "Zeewolde, Netherlands"),
-	
-	/* ==== INTRO ANIMATION ==== */
-	// Fade out a cutout.
-	TD_SET_INT        (background_color, 0xffbdefef),
-	TD_SET_INT        (to_draw,    TD_DRAW_NONE),
+	// MCH2022 thingy.
 	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
-	TD_INTERP_COL     (   0, 2400, TD_LINEAR,  palette[0], 0xff000000, 0x00ffffff),
+	// Prerender some text.
+	TD_DRAW_TITLE     ("Badge.Team",
+					   "PRESENTS"),
+	// Presents thingy.
+	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xff000000, 0x00ffffff),
+	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
+	// Prerender some text.
+	TD_DRAW_TITLE     ("MCH badge",
+					   "Tech demo"),
+	// MCH2022_td.
+	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
+	TD_INTERP_COL     (   0, 2400, TD_LINEAR,  palette[0], 0xff000000, 0x00000000),
 	TD_INTERP_COL     (2400, 2400, TD_LINEAR,  palette[1], 0xffffffff, 0x00ffffff),
 	TD_SET_BOOL       (overlay_clip, false),
 	
@@ -1109,8 +1180,19 @@ static td_event_t events[] = {
 	TD_DELAY          ( 250),
 	TD_INTERP_FLOAT   ( 250,  250, TD_EASE_OUT, angle_1, 1, 0),
 	TD_INTERP_FLOAT   ( 500,  500, TD_EASE,     angle_0, 0, 1),
+	TD_INTERP_COL     (   0,  500, TD_LINEAR,   background_color, 0xff7f7f7f, 0xffff3faf),
 	
-	// TODO: Raspbery Pi.
+	/* ==== MAIL SCENE ==== */
+	// RasPi spot.
+	TD_SET_SPONSOR    (SPON_RASB_PI),
+	TD_SET_INT        (sponsor_col, 0xff000000),
+	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 0, 255),
+	// Mail flying around.
+	TD_SET_INT        (to_draw, TD_DRAW_POST),
+	TD_INTERP_FLOAT   (4500, 5000, TD_LINEAR,   angle_0, 0, 1),
+	// End of sponsor spot.
+	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 255, 0),
+	TD_DELAY          ( 500),
 	
 	/* ==== END OF THE DEMO ==== */
 	// No more sponsors.
@@ -1129,7 +1211,7 @@ static td_event_t events[] = {
 	// Mark the end.
 	TD_DELAY          (   0),
 };
-static size_t n_events = sizeof(events) / sizeof(td_event_t);
+static const size_t n_events = sizeof(events) / sizeof(td_event_t);
 
 // Draws the appropriate frame of the tech demo for the given time.
 // Time is in milliseconds after the first frame.
@@ -1213,8 +1295,8 @@ bool pax_techdemo_draw(size_t now) {
 		case TD_DRAW_RAINBOW:
 			td_draw_rainbow();
 			break;
-		case TD_DRAW_CIRCUIT:
-			td_draw_circuit();
+		case TD_DRAW_POST:
+			td_draw_post();
 			break;
 		case TD_DRAW_PROD:
 			td_draw_prod();

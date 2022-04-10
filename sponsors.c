@@ -33,7 +33,7 @@ sponsor_t sponsors_arr[] = {
 	// Bosch.
 	DEFINE_SPONSOR(logo_bosch,        "Sensors:\nBNO055\nBME680"),
 	// Espressif.
-	DEFINE_SPONSOR(logo_espressif,    "Main CPU: ESP32\nMemory: PSRAM"),
+	DEFINE_SPONSOR(logo_espressif,    "Main CPU: ESP32\nMem.: ESP-PSRAM64H"),
 	// Lattice.
 	DEFINE_SPONSOR(logo_lattice,      "FPGA:\nICE40UP5K"),
 	// Raspberry pi.
