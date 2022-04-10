@@ -763,15 +763,15 @@ static void td_draw_rainbow() {
 		
 		// Left gear.
 		pax_push_2d(buffer);
-			pax_apply_2d(buffer, matrix_2d_translate(-106, 0));
+			pax_apply_2d(buffer, matrix_2d_translate(-108, 0));
 			pax_apply_2d(buffer, matrix_2d_rotate(angle_2*-6/8));
 			td_gear(color0, color1, 8, 66, gear_depth, hub_inner, hub_outer);
 		pax_pop_2d(buffer);
 		
 		// Right gear.
 		pax_push_2d(buffer);
-			pax_apply_2d(buffer, matrix_2d_translate(106, 0));
-			pax_apply_2d(buffer, matrix_2d_rotate(angle_2*-6/7));
+			pax_apply_2d(buffer, matrix_2d_translate(100, 0));
+			pax_apply_2d(buffer, matrix_2d_rotate(angle_2*-6/7+M_PI));
 			td_gear(color0, color1, 7, 58, gear_depth, hub_inner, hub_outer);
 		pax_pop_2d(buffer);
 		
@@ -1103,11 +1103,14 @@ static td_event_t events[] = {
 	// End of sponsor spot.
 	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 255, 0),
 	// aADACSGDjebsddjrbfhvbhdsj
+	TD_SET_FLOAT      (angle_0, 0),
 	TD_INTERP_FLOAT   (   0, 1000, TD_LINEAR,   angle_2, 1, 0),
 	TD_SET_FLOAT      (angle_1, 1),
 	TD_DELAY          ( 250),
 	TD_INTERP_FLOAT   ( 250,  250, TD_EASE_OUT, angle_1, 1, 0),
 	TD_INTERP_FLOAT   ( 500,  500, TD_EASE,     angle_0, 0, 1),
+	
+	// TODO: Raspbery Pi.
 	
 	/* ==== END OF THE DEMO ==== */
 	// No more sponsors.
