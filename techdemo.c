@@ -24,6 +24,7 @@
 
 #include "techdemo.h"
 #include "sponsors.h"
+#include "images/td_anim.h"
 
 #include "pax_shaders.h"
 #include "pax_shapes.h"
@@ -47,6 +48,8 @@ static float      sponsor_logo_x;
 static float      sponsor_logo_y;
 // The sponsor text.
 static char      *sponsor_text;
+// The color of the sponsor text.
+static pax_col_t  sponsor_col;
 // The position of the sponsor text.
 static float      sponsor_text_x;
 // The position of the sponsor text.
@@ -102,7 +105,7 @@ static bool       use_background;
 static pax_col_t  background_color;
 
 // Linked list of interpolations.
-static td_lerp_t *lerps = NULL;
+static td_lerp_list_t *lerps = NULL;
 
 /* ================ config ================ */
 
@@ -111,7 +114,7 @@ static pax_buf_t *buffer = NULL;
 // Clip buffer complementary to the framebuffer.
 static pax_buf_t *clip_buffer = NULL;
 
-// Width of the frame.
+// Width of the frame./
 static int width;
 // Height of the frame.
 static int height;
@@ -125,11 +128,9 @@ static size_t current_time;
 // Planned time for the next event.
 static size_t planned_time;
 // Palette used for the clip buffer.
-static pax_col_t palette[4] = {
+static pax_col_t palette[2] = {
 	0xffffffff,
 	0xffffffff,
-	0xffffffff,
-	0x00000000
 };
 
 // Initialise the tech demo.
@@ -171,8 +172,9 @@ void pax_techdemo_init(pax_buf_t *framebuffer, pax_buf_t *clipbuffer) {
 		// Reset interpolation list.
 		while (lerps) {
 			lerps->prev = NULL;
-			td_lerp_t *tmp = lerps->next;
+			td_lerp_list_t *tmp = lerps->next;
 			lerps->next = NULL;
+			free(lerps);
 			lerps = tmp;
 		}
 		
@@ -180,11 +182,10 @@ void pax_techdemo_init(pax_buf_t *framebuffer, pax_buf_t *clipbuffer) {
 		current_event    = 0;
 		planned_time     = 0;
 		sponsor_alpha    = 0;
+		sponsor_col      = 0xff000000;
 		
-		palette[0]       = 0xffffffff;
-		palette[1]       = 0xffffffff;
-		palette[2]       = 0xffffffff;
-		palette[3]       = 0x00000000;
+		// palette[0]       = 0xffffffff;
+		// palette[1]       = 0xffffffff;
 		
 		clip_scaling     = 1;
 		clip_pan_x       = 0;
@@ -200,6 +201,8 @@ void pax_techdemo_init(pax_buf_t *framebuffer, pax_buf_t *clipbuffer) {
 		angle_1          = 0;
 		angle_2          = 0;
 		angle_3          = 0;
+		angle_4          = 0;
+		angle_5          = 0;
 		
 		buffer_scaling   = 1;
 		buffer_pan_x     = 0;
@@ -233,12 +236,53 @@ pax_col_t td_shader_shimmer(pax_col_t tint, int x, int y, float u, float v, void
 	}
 }
 
+// Some RAINBOW CONSTANTS.
+static const size_t rainbow_segments = 8;
+static const float  rainbow_sqrdist[] = {
+	0.125 * 0.125,
+	0.250 * 0.250,
+	0.375 * 0.375,
+	0.500 * 0.500,
+	0.625 * 0.625,
+	0.750 * 0.750,
+	0.875 * 0.875,
+	1.000 * 1.000,
+};
+static const pax_col_t rainbow_color[] = {
+	0xffff0000,
+	0xffff7f00,
+	0xffffff00,
+	0xff00ff00,
+	0xff00ffff,
+	0xff0000ff,
+	0xffff00ff,
+	0xffff0000,
+};
+
+// A RAINBOW EXPLOSION shader.
+pax_col_t td_shader_rainbow(pax_col_t tint, int x, int y, float u, float v, void *args) {
+	int maxDist = (int) args;
+	x -= width / 2;
+	y -= height;
+	float dist  = (x*x + y*y) / (float) maxDist;
+	
+	for (int i = 0; i < rainbow_segments; i++) {
+		if (dist < rainbow_sqrdist[i]) {
+			tint = rainbow_color[i];
+			goto end;
+		}
+	}
+	
+	end:
+	return pax_col_lerp(angle_1*255, tint, 0xff00ff00);
+}
+
 /* ============== functions =============== */
 
 // Draws some title text on the clip buffer.
 // If there's multiple lines (split by '\n'), that's the subtitle.
 // Text is horizontally as wide as possible and vertically centered.
-static void td_draw_title(size_t planned_time, size_t planned_duration, void *args) {
+static void td_draw_title(size_t planned_time, size_t planned_duration, const void *args) {
 	char *raw        = strdup((char *) args);
 	char *index      = strchr(raw, '\n');
 	char *title;
@@ -280,12 +324,14 @@ static void td_draw_title(size_t planned_time, size_t planned_duration, void *ar
 }
 
 // Linearly interpolate a variable.
-static void td_add_lerp(size_t planned_time, size_t planned_duration, void *args) {
-	td_lerp_t *lerp = args;
-	lerp->start = planned_time;
-	lerp->end   = lerp->duration + planned_time;
-	lerp->prev  = NULL;
-	lerp->next  = lerps;
+static void td_add_lerp(size_t planned_time, size_t planned_duration, const void *args) {
+	const td_lerp_t      *subject = (td_lerp_t *) args;
+	td_lerp_list_t *lerp = malloc(sizeof(td_lerp_list_t));
+	lerp->start   = planned_time;
+	lerp->end     = subject->duration + planned_time;
+	lerp->prev    = NULL;
+	lerp->next    = lerps;
+	lerp->subject = subject;
 	if (lerps) {
 		lerps->prev = lerp;
 	}
@@ -293,7 +339,8 @@ static void td_add_lerp(size_t planned_time, size_t planned_duration, void *args
 }
 
 // Perform aforementioned interpolation.
-static void td_perform_lerp(td_lerp_t *lerp) {
+static void td_perform_lerp(td_lerp_list_t *lerp) {
+	const td_lerp_t *subj = lerp->subject;
 	float part = (current_time - lerp->start) / (float) (lerp->end - lerp->start);
 	if (current_time <= lerp->start) {
 		// Clip to beginning.
@@ -302,7 +349,7 @@ static void td_perform_lerp(td_lerp_t *lerp) {
 		// Clip to end.
 		part = 1.0;
 	} else {
-		switch (lerp->timing) {
+		switch (subj->timing) {
 			case TD_EASE_OUT:
 				// Ease-out:    y=-x²+2x
 				part = -part*part + 2*part;
@@ -317,41 +364,51 @@ static void td_perform_lerp(td_lerp_t *lerp) {
 				break;
 		}
 	}
-	switch (lerp->type) {
+	switch (subj->type) {
 		uint32_t bleh;
 		case TD_INTERP_TYPE_INT:
 			// Interpolate an integer.
-			*lerp->int_ptr = lerp->int_from + (lerp->int_to - lerp->int_from) * part;
+			*subj->int_ptr = subj->int_from + (subj->int_to - subj->int_from) * part;
 			break;
 		case TD_INTERP_TYPE_COL:
 			// Interpolate a (RGB) color.
-			*lerp->int_ptr = pax_col_lerp(part*255, lerp->int_from, lerp->int_to);
+			*subj->int_ptr = pax_col_lerp(part*255, subj->int_from, subj->int_to);
 			break;
 		case TD_INTERP_TYPE_HSV:
 			// Interpolate a (HSV) color.
-			bleh = pax_col_lerp(part*255, lerp->int_from, lerp->int_to);
-			*lerp->int_ptr = pax_col_ahsv(bleh >> 24, bleh >> 16, bleh >> 8, bleh);
+			bleh = pax_col_lerp(part*255, subj->int_from, subj->int_to);
+			*subj->int_ptr = pax_col_ahsv(bleh >> 24, bleh >> 16, bleh >> 8, bleh);
 			break;
 		case TD_INTERP_TYPE_FLOAT:
 			// Interpolate a float.
-			*lerp->float_ptr = lerp->float_from + (lerp->float_to - lerp->float_from) * part;
+			*subj->float_ptr = subj->float_from + (subj->float_to - subj->float_from) * part;
 			break;
 	}
 }
 
 // Set a variable of a primitive type.
-static void td_set_var(size_t planned_time, size_t planned_duration, void *args) {
+static void td_set_var(size_t planned_time, size_t planned_duration, const void *args) {
 	td_set_t *set = (td_set_t *) args;
 	memcpy(set->pointer, (void *) &set->value, set->size);
 }
 
 // Set THE string.
-static void td_set_str(size_t planned_time, size_t planned_duration, void *args) {
+static void td_set_str(size_t planned_time, size_t planned_duration, const void *args) {
 	text_str = (char *) args;
 }
 
 // Prepare the sponsor for showing.
-static void td_prep_sponsor(size_t planned_time, size_t planned_duration, void *args) {
+static void td_prep_sponsor(size_t planned_time, size_t planned_duration, const void *args) {
+	if ((int) args == -1) {
+		// Clean up.
+		if (sponsor_logo) {
+			pax_buf_destroy(sponsor_logo);
+			free(sponsor_logo);
+			sponsor_logo = NULL;
+		}
+		return;
+	}
+	
 	// Remove the existing logo image, if any.
 	if (sponsor_logo) {
 		pax_buf_destroy(sponsor_logo);
@@ -361,24 +418,44 @@ static void td_prep_sponsor(size_t planned_time, size_t planned_duration, void *
 	sponsor_t *sponsor = &sponsors_arr[(size_t) args];
 	
 	// Decode the PNG.
-	pax_decode_png_buf(sponsor_logo, sponsor->logo, sponsor->logo_len, PAX_BUF_4_GREY, CODEC_FLAG_OPTIMAL);
-	// Place it in the bottom right corner.
+	pax_decode_png_buf(sponsor_logo, sponsor->logo, sponsor->logo_len, PAX_BUF_32_8888ARGB, CODEC_FLAG_OPTIMAL);
+	// Place it in the top right corner.
 	sponsor_logo_x = buffer->width  - sponsor_logo->width;
-	sponsor_logo_y = buffer->height - sponsor_logo->height;
+	sponsor_logo_y = 0;
 	
 	// Is there text?
 	sponsor_text = sponsor->text;
 	if (sponsor_text) {
-		// Then place it alongside the logo.
+		// Then place it in the buttom right corner.
 		pax_vec1_t size = pax_text_size(PAX_FONT_DEFAULT, 18, sponsor_text);
-		sponsor_text_x = sponsor_logo_x - size.x;
+		sponsor_text_x = buffer->width - size.x;
 		sponsor_text_y = buffer->height - size.y;
+	}
+}
+
+// Draw a frame of the intro.
+static void td_draw_intro(size_t planned_time, size_t planned_duration, const void *args) {
+	int frameno = (int) args;
+	if (frameno < 0 || frameno >= td_anim_frames_len) {
+		// Lolwut?
+		return;
+	}
+	td_anim_frame_t *frame = &td_anim_frames[frameno];
+	
+	if (frameno == 0) {
+		// Ensure correct background color.
+		pax_background(buffer, 0xffbdefef);
+	}
+	
+	// Iterate over and draw all the parts.
+	for (int i = 0; i < frame->len; i++) {
+		pax_insert_png_buf(buffer, frame->parts[i].raw, frame->parts[i].len, frame->parts[i].x, frame->parts[i].y, 0);
 	}
 }
 
 /* =============== drawing ================ */
 
-// Draws a square, a circle and a triangle.
+/* ==== Draws a square, a circle and a triangle ==== */
 static void td_draw_shapes() {
 	float scale = fminf(width * 0.2, height * 0.4);
 	pax_col_t col = 0xffff0000;
@@ -405,7 +482,7 @@ static void td_draw_shapes() {
 	pax_draw_tri(buffer, col, -my_cos, -my_sin, -my_cos, my_sin, 1, 0);
 }
 
-// Draws a funny shimmer.
+/* ==== Draws a funny shimmer ==== */
 static void td_draw_shimmer() {
 	pax_apply_2d(buffer, matrix_2d_translate(width * 0.5, height * 0.5));
 	pax_apply_2d(buffer, matrix_2d_rotate(angle_1));
@@ -417,7 +494,7 @@ static void td_draw_shimmer() {
 	pax_shade_rect(buffer, -1, &shader, NULL, -50, -50, 100, 100);
 }
 
-// Show arcs and curves.
+/* ==== Show arcs and curves ==== */
 static void td_draw_curves() {
 	// Bezier curve control points.
 	pax_vec4_t ctl0 = {
@@ -465,7 +542,7 @@ static void td_draw_curves() {
 		
 		pax_outline_arc(buffer, -1, x, y, r, a0, a1);
 		
-		pax_col_t stretch = pax_col_hsv(0, 0, bri);
+		pax_col_t stretch = pax_col_argb(bri, 255, 255, 255);
 		
 		pax_push_2d(buffer);
 		pax_apply_2d(buffer, matrix_2d_translate(x, y));
@@ -495,37 +572,374 @@ static void td_draw_curves() {
 	}
 }
 
-// Something something fancy air sensors.
-static void td_draw_aero() {
-	// A little placeholder scene.
-	pax_col_t sky_color   = 0xff00afff;
-	pax_col_t sun_color   = pax_col_lerp(255*angle_0, sky_color, 0xffffdf1f);
-	pax_col_t grass_color = pax_col_lerp(255*angle_0, sky_color, 0xff0faf2f);
+/* ==== Something something fancy air sensors ==== */
+
+// A very low poly bird.
+// Flap angle ranges from 0 to 1 and then repeats.
+static void td_bird(pax_col_t color, float flap_angle, float random_offset) {
+	float wing_y = sin((flap_angle + random_offset) * 2 * M_PI);
 	
-	// Sun.
 	pax_push_2d(buffer);
-		pax_apply_2d(buffer, matrix_2d_scale    (35.0, 35.0));
-		pax_apply_2d(buffer, matrix_2d_translate( 1.2,  1.1));
-		pax_draw_circle(buffer, sun_color, 0, 0, 1);
+	// Bird size.
+	pax_apply_2d(buffer, matrix_2d_scale(10, 10));
+	// Flap with the wings.
+	pax_apply_2d(buffer, matrix_2d_translate(0, wing_y * -0.2));
+	// Some randomness.
+	pax_apply_2d(buffer, matrix_2d_translate(0, sin((flap_angle + random_offset) * 0.25 * M_PI) * 0.5));
+	
+	// Left wing.
+	pax_draw_tri(buffer, color, -1, wing_y, 0, -0.5, 0, 0.5);
+	// Right wing.
+	pax_draw_tri(buffer, color,  1, wing_y, 0, -0.5, 0, 0.5);
+	
+	pax_pop_2d(buffer);
+}
+
+// The scene for air sensors.
+// Parameters:
+//   angle_0: opacity
+//   angle_1: birds flapping wings
+//   angle_2: apple rotation
+//   angle_3: birds Y (0 is center, relative to buffer size)
+//   angle_4: apple Y (0 is center, relative to buffer size)
+//   angle_5: apple X (0 is center, relative to buffer size)
+static void td_draw_aero() {
+	// A falling apple scene.
+	pax_col_t sky_color   = 0xffbdefef;
+	pax_col_t bird_color  = 0xff000000;
+	pax_col_t apple_color = 0xfff82626;
+	pax_col_t stem_color  = 0xff87381e;
+	
+	// Interpolate colors.
+	uint8_t   part        = (uint8_t) (255.0 * angle_0);
+	bird_color  = pax_col_lerp(part, sky_color, bird_color);
+	apple_color = pax_col_lerp(part, sky_color, apple_color);
+	stem_color  = pax_col_lerp(part, sky_color, stem_color);
+	
+	// TODO: Draw the clouds.
+	
+	// Draw the birds.
+	pax_push_2d(buffer);
+	// General vicinity.
+	pax_apply_2d(buffer, matrix_2d_translate(buffer->width * 0.75, buffer->height * (0.5 + angle_3)));
+	
+	// Multiple randomly placed birds.
+	pax_apply_2d(buffer, matrix_2d_translate(-15, 30));
+	td_bird(bird_color, angle_1, 9.1);
+	
+	pax_apply_2d(buffer, matrix_2d_translate(35, -20));
+	td_bird(bird_color, angle_1, 12.9);
+	
+	pax_apply_2d(buffer, matrix_2d_translate(-15, -15));
+	td_bird(bird_color, angle_1, 23.2);
+	
+	pax_apply_2d(buffer, matrix_2d_translate(35, -10));
+	td_bird(bird_color, angle_1, 5.5);
+	
 	pax_pop_2d(buffer);
 	
-	// Grass.
-	size_t n_points = 32;
-	pax_vec1_t curve[n_points];
-	pax_vec4_t ctl_points = {
-		.x0 = 0.0,  .y0 = 0.8,
-		.x1 = 0.25, .y1 = 0.7,
-		.x2 = 0.6,  .y2 = 0.85,
-		.x3 = 1.0,  .y3 = 0.8
-	};
-	pax_vectorise_bezier((pax_vec1_t *) curve, n_points, ctl_points);
+	// Draw the apple.
+	pax_push_2d(buffer);
+	// Place of the apple.
+	pax_apply_2d(buffer, matrix_2d_translate(buffer->width * (0.5 + angle_5), buffer->height * (0.5 + angle_4)));
+	// Make it wobble very slightly.
+	pax_apply_2d(buffer, matrix_2d_translate(cos(angle_2 * 0.125 * M_PI) * 15, sin(angle_2 * 0.25 * M_PI) * 10));
+	// Rotate it progressively.
+	pax_apply_2d(buffer, matrix_2d_rotate(angle_2));
+	// Apple size.
+	pax_apply_2d(buffer, matrix_2d_scale(12, 12));
+	
+	pax_draw_circle(buffer, apple_color, 0, 0, 1);
+	pax_draw_tri(buffer, stem_color, 0.8, 0, 1.5, 0, 1.5, 0.3);
+	
+	pax_pop_2d(buffer);
+}
+
+// Draws a gear with the given number of teeth.
+static void td_gear(pax_col_t color0, pax_col_t color1, int n_teeth, float big_teeth, float small_teeth, float hub_inner, float hub_outer) {
+	// Prepare the points.
+	small_teeth = big_teeth - small_teeth;
+	int threshold   = 4;
+	int multiplier  = 8;
+	size_t n_points = n_teeth * multiplier + 1;
+	pax_vec1_t points[n_points];
+	pax_vec1_t teeth [n_points];
+	pax_vectorise_circle(points, n_points, 0, 0, 1);
+	
+	// COMPUTE something.
+	for (int i = 0; i < n_points; i++) {
+		// Tooth scale.
+		if ((i % multiplier) < threshold) {
+			// Big teeth.
+			teeth[i].x = points[i].x * big_teeth;
+			teeth[i].y = points[i].y * big_teeth;
+		} else {
+			// Small teeth.
+			teeth[i].x = points[i].x * small_teeth;
+			teeth[i].y = points[i].y * small_teeth;
+		}
+		
+	}
+	
+	// DRAW something.
+	for (int i = 0; i < n_points - 1; i++) {
+		// Hub.
+		pax_draw_tri(
+			buffer, color1,
+			points[i].x   * hub_outer, points[i].y   * hub_outer,
+			points[i].x   * hub_inner, points[i].y   * hub_inner,
+			points[i+1].x * hub_inner, points[i+1].y * hub_inner
+		);
+		pax_draw_tri(
+			buffer, color1,
+			points[i].x   * hub_outer, points[i].y   * hub_outer,
+			points[i+1].x * hub_inner, points[i+1].y * hub_inner,
+			points[i+1].x * hub_outer, points[i+1].y * hub_outer
+		);
+		// Teeth.
+		pax_draw_tri(
+			buffer, color0,
+			points[i].x * hub_outer,   points[i].y * hub_outer,
+			teeth [i].x,               teeth [i].y,
+			teeth [i+1].x,             teeth [i+1].y
+		);
+		pax_draw_tri(
+			buffer, color0,
+			points[i].x * hub_outer,   points[i].y * hub_outer,
+			teeth [i+1].x,             teeth [i+1].y,
+			points[i+1].x * hub_outer, points[i+1].y * hub_outer
+		);
+	}
+}
+
+/* ==== Now i'm just making stuff up ==== */
+
+// The rainbowtastical scene.
+// Parameters:
+//   angle_0: Rainbow size.
+//   angle_1: Fade to gears.
+//   angle_2: Gear angle.
+static void td_draw_rainbow() {
+	static float last_radius = 0;
+	if (angle_0 < 0.01) {
+		last_radius = 0;
+	}
+	
+	int max_dist = width * width * 0.25 + height * height;
+	if (angle_1 == 0) {
+		// Prepare the shader.
+		const pax_shader_t shader = {
+			.callback          = &td_shader_rainbow,
+			.callback_args     = (void *) max_dist,
+			.alpha_promise_0   = false,
+			.alpha_promise_255 = true
+		};
+		
+		// Make some OPTIMISED POINTS.
+		const size_t n_points = 32;
+		pax_vec1_t points[n_points];
+		pax_vectorise_arc(points, n_points, 0, 0, 1, 0, M_PI * 2);
+		
+		// Draw the rainbow.
+		pax_push_2d(buffer);
+		pax_apply_2d(buffer, matrix_2d_translate(width * 0.5, height));
+		float radius = sqrt(max_dist) * angle_0;
+		for (int i = 0; i < n_points - 1; i ++) {
+			pax_shade_tri(
+				buffer, -1, &shader, NULL,
+				points[i].x   * last_radius, points[i].y   * last_radius,
+				points[i].x   * radius,      points[i].y   * radius,
+				points[i+1].x * last_radius, points[i+1].y * last_radius
+			);
+			pax_shade_tri(
+				buffer, -1, &shader, NULL,
+				points[i+1].x * radius,      points[i+1].y * radius,
+				points[i].x   * radius,      points[i].y   * radius,
+				points[i+1].x * last_radius, points[i+1].y * last_radius
+			);
+		}
+	}
+	last_radius = angle_0 - 0.02;
+	
+	// Transition to background color thingy.
+	if (angle_1 > 0 && angle_1 < 1) {
+		const pax_shader_t shader = {
+			.callback          = &td_shader_rainbow,
+			.callback_args     = (void *) max_dist,
+			.alpha_promise_0   = false,
+			.alpha_promise_255 = true
+		};
+		pax_shade_rect(
+			buffer, 0,
+			&shader, NULL,
+			0, 0, width, height
+		);
+		// float radius = sqrt(max_dist) * angle_1;
+		// pax_draw_arc(
+		// 	buffer, 0xff00ff00,
+		// 	width * 0.5, height,
+		// 	radius, 0, M_PI
+		// );
+	}
+	
+	// APPEAR GEAR.
+	if (angle_1 > 0.5) {
+		// I'd like some colors please!
+		uint8_t alpha = (angle_1-0.5)*511;
+		pax_col_t color0 = alpha << 24 | 0x7f7f7f;
+		pax_col_t color1 = alpha << 24 | 0x3f3f3f;
+		
+		float hub_inner = 10;
+		float hub_outer = 20;
+		float gear_depth = 10;
+		
+		// Draw some FANTASTICAL gear.
+		pax_push_2d(buffer);
+		pax_apply_2d(buffer, matrix_2d_translate(width*0.5, height*0.5));
+		
+		// Center gear.
+		pax_push_2d(buffer);
+			pax_apply_2d(buffer, matrix_2d_rotate(angle_2));
+			td_gear(color0, color1, 6, 50, gear_depth, hub_inner, hub_outer);
+		pax_pop_2d(buffer);
+		
+		// Left gear.
+		pax_push_2d(buffer);
+			pax_apply_2d(buffer, matrix_2d_translate(-108, 0));
+			pax_apply_2d(buffer, matrix_2d_rotate(angle_2*-6/8));
+			td_gear(color0, color1, 8, 66, gear_depth, hub_inner, hub_outer);
+		pax_pop_2d(buffer);
+		
+		// Right gear.
+		pax_push_2d(buffer);
+			pax_apply_2d(buffer, matrix_2d_translate(100, 0));
+			pax_apply_2d(buffer, matrix_2d_rotate(angle_2*-6/7+M_PI));
+			td_gear(color0, color1, 7, 58, gear_depth, hub_inner, hub_outer);
+		pax_pop_2d(buffer);
+		
+		pax_pop_2d(buffer);
+	}
+}
+
+/* ==== Post office scene ==== */
+
+// Draws a letter.
+static void td_letter(float x, float y, float scale) {
+	// Letters have a weird size.
+	pax_push_2d (buffer);
+	pax_apply_2d(buffer, matrix_2d_translate(x, y));
+	pax_apply_2d(buffer, matrix_2d_scale(sqrtf(2), 1));
+	pax_apply_2d(buffer, matrix_2d_scale(scale, scale));
+	
+	pax_col_t bg_col = 0xffffffff;
+	pax_col_t fg_col = 0xff7f7f7f;
+	
+	// Background.
+	pax_draw_rect(buffer, bg_col, -0.5, -0.5, 1, 1);
+	// Outline.
+	pax_outline_rect(buffer, fg_col, -0.5, -0.5, 1, 1);
+	// Cut thingy.
+	pax_draw_line(buffer, fg_col, -0.5, -0.5, 0, 0);
+	pax_draw_line(buffer, fg_col, 0.5, -0.5, 0, 0);
+	
+	pax_pop_2d  (buffer);
+}
+
+// Draws a letter flying by at a specific angle at a specific time.
+static void td_flying_letter(float angle, float offset, float start, float end, float scale) {
+	// Compute stuff.
+	float max = scale * 4 + fmaxf(width, height);
+	float part = (angle_0 - start) / (end - start);
+	
+	// Something.
+	pax_push_2d (buffer);
+	pax_apply_2d(buffer, matrix_2d_translate(width / 2, height / 2));
+	pax_apply_2d(buffer, matrix_2d_rotate(angle));
+	pax_apply_2d(buffer, matrix_2d_translate(-max/2 + max*part, 0));
+	pax_apply_2d(buffer, matrix_2d_rotate(angle_1 + offset));
+	td_letter   (0, 0, scale);
+	pax_pop_2d  (buffer);
+}
+
+// Maybe flying letters?
+static void td_draw_post() {
+	// Just some chaos, nothing special.
+	td_flying_letter(2.3172995179137765, 0.9327325324906965, 0.6200310008051024, 0.8572794494729159, 48.86588953650229);
+	td_flying_letter(1.1905063070341015, 0.4183943088989168, 0.3240403988058697, 0.33705272363358596, 38.143095623541285);
+	td_flying_letter(2.169114933629167, 2.245400777697782, 0.6312957555365378, 0.7501916341097947, 36.55700488400967);
+	td_flying_letter(1.64015389484868, 3.0743381865998374, 0.14477321722782616, 0.20338671121329335, 38.419331703051235);
+	td_flying_letter(2.4754739774018657, 1.3762650634594125, 0.48545398736001416, 0.6335792065361739, 39.01610438918797);
+	td_flying_letter(1.1918462982962907, 0.9484799058593335, 0.607089712020574, 0.6499199346806023, 20.16319704689827);
+	td_flying_letter(2.927789411987766, 0.2602116233999743, 0.6605111997828027, 0.908105035819395, 43.07647581715252);
+	td_flying_letter(2.669121756551718, 0.8658407476366089, 0.13602316207365497, 0.41475671576240103, 39.05030845044536);
+	td_flying_letter(0.3159085771253503, 1.1458499048251523, 0.18580346689555993, 0.23224011824071963, 28.787298439990934);
+	td_flying_letter(2.7690272233484485, 2.300568705108835, 0.6446422896099403, 0.7422192872844627, 43.90241810798484);
+	td_flying_letter(0.2974841191836354, 2.512401470684956, 0.03609380030621033, 0.23686171231281655, 43.69030233338533);
+	td_flying_letter(2.113161103563894, 1.6288428612030033, 0.36056494296981667, 0.5132525117143615, 48.19278021461517);
+	td_flying_letter(2.527710507937092, 2.8875445512690936, 0.09757311583458078, 0.31201138286110786, 46.190837995313615);
+	td_flying_letter(2.05206268800383, 0.4667752847978764, 0.3753097843265101, 0.5276153455193775, 28.129515980212915);
+	td_flying_letter(1.0159652669510584, 1.807708514496489, 0.18895490288728967, 0.48657324052571327, 35.04562751011628);
+	td_flying_letter(1.2738686960698262, 0.12285897725133259, 0.287234101469115, 0.4865526518295369, 27.581135279138138);
+	td_flying_letter(0.05161149184345973, 2.9190484660345617, 0.015185080558591123, 0.0776748678921273, 38.0804602103465);
+	td_flying_letter(2.815681506060534, 1.8775014638544705, 0.6093510831545631, 0.6922654608510701, 20.050193387042746);
+	td_flying_letter(1.669315294457934, 1.5957309899439274, 0.13498914479436858, 0.3218088198513566, 20.865394026032426);
+	td_flying_letter(0.6829852529593806, 2.34909292707273, 0.09109951250640223, 0.20833267233162733, 21.905061643025615);
+}
+
+/* ==== Something about making the thing ==== */
+
+// BOX.
+static void td_box(bool cross, int alpha, float x, float y) {
+	pax_push_2d(buffer);
+	pax_apply_2d(buffer, matrix_2d_translate(x, y));
+	pax_apply_2d(buffer, matrix_2d_scale(50, 50));
+	pax_apply_2d(buffer, matrix_2d_translate(-0.5, 0));
+	
+	if (cross) {
+		// Plain red background.
+		pax_draw_rect(buffer, alpha|0xff0000, 0, -1, 1, 1);
+		// A yellow cross shape.
+		pax_draw_rect(buffer, alpha|0xffff00, 0, -0.7, 1, 0.4);
+		pax_draw_rect(buffer, alpha|0xffff00, 0.3, -1, 0.4, 1);
+	} else {
+		// I guess a blue box will do.
+		pax_draw_rect(buffer, alpha|0x0000ff, 0.25, -0.50, 0.50, 0.50);
+	}
+	
+	pax_pop_2d(buffer);
+}
+
+// Assembly line thing.
+// Parameters:
+//   angle_0: How far along the boxes move.
+//   angle_1: The press.
+//   angle_2: The alpha.
+static void td_draw_prod() {
+	float dx = width / 5.0;
+	uint32_t alpha = (int) (angle_2 * 0xff) << 24;
 	
 	pax_push_2d(buffer);
-	pax_apply_2d(buffer, matrix_2d_scale(buffer->width, buffer->height + 1));
-	for (size_t i = 0; i < n_points - 1; i++) {
-		pax_draw_tri(buffer, grass_color, curve[i].x, curve[i].y, curve[i].x,   1,            curve[i+1].x, 1);
-		pax_draw_tri(buffer, grass_color, curve[i].x, curve[i].y, curve[i+1].x, curve[i+1].y, curve[i+1].x, 1);
-	}
+	pax_apply_2d(buffer, matrix_2d_translate(dx * angle_0 + dx / 2, 0));
+		// Boxes before the press.
+		for (int i = 0; i < 3; i ++) {
+			td_box(false, alpha, dx * i - dx, 200);
+		}
+		// Boxes after the press.
+		for (int i = 0; i < 3; i ++) {
+			td_box(true, alpha, dx * i + dx * 2, 200);
+		}
+	pax_pop_2d(buffer);
+	
+	// The hiding device.
+	pax_draw_rect(buffer, alpha|0xafafaf, (width - dx)/2, 200-dx, dx, dx);
+	
+	// The press.
+	pax_push_2d(buffer);
+	pax_apply_2d(buffer, matrix_2d_translate(width/2, 200-dx*1.5+dx/2*angle_1));
+		// The plunger.
+		pax_draw_rect(buffer, alpha|0x7f3f3f, -dx/2, 0, dx, -dx/4);
+		// The rod.
+		pax_draw_rect(buffer, alpha|0x5f3f3f, -dx/4, -dx/4, dx/2, -height);
 	pax_pop_2d(buffer);
 }
 
@@ -547,16 +961,17 @@ static void td_draw_aero() {
 */
 
 #define TD_DELAY(time) {.duration=time,.callback=NULL}
+#define TD_INTRO(frametime, frameno) {.duration=frametime, .callback=td_draw_intro, .callback_args=(void*)frameno}
 #define TD_SET_SPONSOR(id) {\
 			.duration = 0,\
 			.callback = td_prep_sponsor,\
-			.callback_args=id\
+			.callback_args=(const void *) id\
 		}
 #define TD_DRAW_TITLE(title, subtitle) {.duration=0,.callback=td_draw_title,.callback_args=title"\n"subtitle}
 #define TD_INTERP_INT(delay_time, interp_time, timing_func, variable, from, to) {\
 			.duration = delay_time,\
 			.callback = td_add_lerp,\
-			.callback_args = &(td_lerp_t){\
+			.callback_args = &(const td_lerp_t){\
 				.duration = interp_time,\
 				.int_ptr  = (int *) &(variable),\
 				.int_from = (from),\
@@ -568,7 +983,7 @@ static void td_draw_aero() {
 #define TD_INTERP_COL(delay_time, interp_time, timing_func, variable, from, to) {\
 			.duration = delay_time,\
 			.callback = td_add_lerp,\
-			.callback_args = &(td_lerp_t){\
+			.callback_args = &(const td_lerp_t){\
 				.duration = interp_time,\
 				.int_ptr  = (int *) &(variable),\
 				.int_from = (from),\
@@ -580,7 +995,7 @@ static void td_draw_aero() {
 #define TD_INTERP_AHSV(delay_time, interp_time, timing_func, variable, from, to) {\
 			.duration = delay_time,\
 			.callback = td_add_lerp,\
-			.callback_args = &(td_lerp_t){\
+			.callback_args = &(const td_lerp_t){\
 				.duration = interp_time,\
 				.int_ptr  = (int *) &(variable),\
 				.int_from = (from),\
@@ -592,7 +1007,7 @@ static void td_draw_aero() {
 #define TD_INTERP_FLOAT(delay_time, interp_time, timing_func, variable, from, to) {\
 			.duration = delay_time,\
 			.callback = td_add_lerp,\
-			.callback_args = &(td_lerp_t){\
+			.callback_args = &(const td_lerp_t){\
 				.duration   = interp_time,\
 				.float_ptr  = (float *) &(variable),\
 				.float_from = (from),\
@@ -604,7 +1019,7 @@ static void td_draw_aero() {
 #define TD_SET_0(type_size, variable, new_value) {\
 			.duration = 0,\
 			.callback = td_set_var,\
-			.callback_args = &(td_set_t){\
+			.callback_args = &(const td_set_t){\
 				.size     = (type_size),\
 				.pointer  = (void *) &(variable),\
 				.value    = (new_value)\
@@ -616,7 +1031,7 @@ static void td_draw_aero() {
 #define TD_SET_FLOAT(variable, new_value) {\
 			.duration = 0,\
 			.callback = td_set_var,\
-			.callback_args = &(td_set_t){\
+			.callback_args = &(const td_set_t){\
 				.size     = sizeof(float),\
 				.pointer  = (void *) &(variable),\
 				.f_value  = (new_value)\
@@ -625,94 +1040,238 @@ static void td_draw_aero() {
 #define TD_SET_STR(value) {\
 			.duration = 0,\
 			.callback = td_set_str,\
-			.callback_args = (value)\
+			.callback_args = (void*) (value)\
 		}
-#define TD_SHOW_TEXT(str) \
+#define TD_SHOW_LIGHT_TEXT(str) \
 		TD_SET_STR(str),\
 		TD_INTERP_COL(0, 2500, TD_EASE_IN, text_col, 0xffffffff, 0x00ffffff)
+#define TD_SHOW_DARK_TEXT(str) \
+		TD_SET_STR(str),\
+		TD_INTERP_COL(0, 2500, TD_EASE_IN, text_col, 0xff000000, 0x00000000)
 
-static td_event_t events[] = {
+#define TD_ANIM_FRAMETIME 357
+
+const td_event_t events[] = {
+	
+	/* ==== TITLE SEQUENCE ==== */
+	TD_SET_INT        (background_color, 0xffbdefef),
+	TD_SET_INT        (to_draw,    TD_DRAW_NONE),
 	// Prerender some text.
-	TD_DRAW_TITLE  ("MCH2022",
-					"Friday, 22 July, 2022\n"
-					"Zeewolde, Netherlands"),
+	TD_DRAW_TITLE     ("MCH2022",
+					   "Friday, 22 July, 2022\n"
+					   "Zeewolde, Netherlands"),
+	// MCH2022 thingy.
+	TD_INTERP_COL     (3500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
+	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xff000000, 0xffffffff),
+	// Prerender some text.
+	TD_DRAW_TITLE     ("Badge.Team",
+					   " PRESENTS "),
+	// Presents thingy.
+	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
+	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xff000000, 0xffffffff),
+	// Prerender some text.
+	TD_DRAW_TITLE     ("MCH2022",
+					   "Tech demo"),
+	// MCH2022_td.
+	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
+	TD_INTERP_COL     (   0, 2400, TD_LINEAR,  palette[0], 0xff000000, 0x00000000),
+	TD_INTERP_COL     (2400, 2400, TD_LINEAR,  palette[1], 0xffffffff, 0x00ffffff),
+	TD_SET_BOOL       (overlay_clip, false),
 	
-	// Fade out a cutout.
-	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0),
-	TD_INTERP_COL  (2400, 2400, TD_LINEAR,  palette[1], 0xffffffff, 0),
-	TD_SET_BOOL    (overlay_clip, false),
-	// Start spinning the shapes.
-	TD_SHOW_TEXT   ("Sample text"),
-	TD_INTERP_FLOAT(2000, 4000, TD_EASE,     angle_0, 0, M_PI*3),
-	TD_INTERP_FLOAT(2000, 4000, TD_EASE_IN,  angle_1, 0, M_PI*2),
-	// Zoom in on the circle.
-	TD_INTERP_FLOAT(   0, 2000, TD_EASE_IN,  buffer_scaling, 1, 3),
-	TD_INTERP_COL  (2500, 2000, TD_EASE_IN,  background_color, 0, 0xffff0000),
+	/* ==== INTRO ANIMATION ==== */
+	TD_SET_BOOL       (use_background, false),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 0),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 1),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 2),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 3),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 4),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 5),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 6),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 7),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 8),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 9),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 10),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 11),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 12),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 13),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 14),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 15),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 16),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 17),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 18),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 19),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 20),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 21),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 22),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 23),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 24),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 25),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 26),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 27),
+	TD_DELAY          ( 500),
+	TD_SET_BOOL       (use_background, true),
 	
-	// Show the shimmer effect.
-	TD_SHOW_TEXT   ("Sample text"),
-	TD_SET_INT     (to_draw,    TD_DRAW_SHIMMER),
-	TD_SET_BOOL    (use_background, false),
-	TD_INTERP_FLOAT(   0,  500, TD_EASE_OUT, buffer_scaling, 0.00001, 1),
-	TD_INTERP_FLOAT( 500,  500, TD_EASE,     angle_1, M_PI*0.5, 0),
-	TD_INTERP_FLOAT(1500, 1500, TD_EASE,     angle_0, 0, 1),
-	// Fade away the yelloughw.
-	TD_SET_BOOL    (use_background, true),
-	TD_INTERP_FLOAT(   0,  500, TD_EASE_OUT, buffer_scaling, 1, 0.00001),
-	TD_INTERP_COL  ( 500,  500, TD_EASE,     background_color, 0xffff0000, 0xff000000),
+	// // Spon test.
+	// TD_SET_INT        (sponsor_alpha, 255),
+	// TD_SET_SPONSOR    (SPON_ALLNET),
+	// TD_DELAY          (1000),
+	// TD_SET_SPONSOR    (SPON_LATTICE),
+	// TD_DELAY          (1000),
+	// TD_SET_SPONSOR    (SPON_ESP),
+	// TD_DELAY          (1000),
+	// TD_SET_SPONSOR    (SPON_BOSCH),
+	// TD_DELAY          (1000),
+	// TD_SET_SPONSOR    (SPON_RASB_PI),
+	// TD_DELAY          (1000),
+	// TD_SET_INT        (sponsor_alpha, 0),
+	// TD_DELAY          (1000),
 	
-	// Draw funny arcs and curves.
-	TD_SHOW_TEXT   ("Better graphics"),
-	TD_SET_INT     (to_draw,    TD_DRAW_CURVES),
-	TD_SET_FLOAT   (buffer_scaling, 1),
-	TD_SET_FLOAT   (angle_0,        0),
-	TD_SET_FLOAT   (angle_4,        0),
-	TD_INTERP_FLOAT(   0, 4500, TD_EASE,     angle_2, 0, M_PI * 0.5),
-	TD_INTERP_FLOAT(   0, 3000, TD_EASE,     angle_3, 0, 1),
-	TD_INTERP_FLOAT(1500, 1500, TD_EASE,     angle_1, 0, 1),
-	TD_INTERP_FLOAT( 500,  500, TD_EASE,     angle_1, 1, 2),
-	TD_INTERP_FLOAT(1000, 1000, TD_EASE,     angle_1, 2, 3),
-	// Curves go away.
-	TD_INTERP_FLOAT(   0, 1500, TD_EASE,     angle_4, 0, 1),
-	TD_INTERP_FLOAT( 750,  750, TD_EASE,     angle_0, 0, 1),
-	TD_INTERP_FLOAT( 250,  250, TD_EASE,     angle_0, 1, 2),
-	TD_INTERP_FLOAT( 500,  500, TD_EASE,     angle_0, 2, 3),
-	
+	/* ==== APPLE SCENE ==== */
+	// Bosch spot.
+	TD_SET_SPONSOR    (SPON_BOSCH),
+	TD_INTERP_INT     (1000,  500, TD_LINEAR,   sponsor_alpha, 0, 255),
 	// Funny sensors.
-	TD_SHOW_TEXT   ("Sample text"),
-	TD_SET_INT     (to_draw,    TD_DRAW_NONE),
-	TD_INTERP_COL  ( 500,  500, TD_EASE_IN,  background_color, 0xff000000, 0xff00afff),
-	TD_SET_INT     (to_draw,    TD_DRAW_AERO),
-	// Test sponsor.
-	TD_SET_SPONSOR (SPON_TEMP),
-	TD_INTERP_INT  (   0, 1000, TD_EASE_OUT, sponsor_alpha, 0, 255),
-	// Scene.
-	TD_INTERP_FLOAT(1000, 1000, TD_EASE_OUT, angle_0, 0, 1),
-	TD_DELAY       (3500),
-	TD_INTERP_INT  (   0, 1000, TD_EASE_IN,  sponsor_alpha, 255, 0),
-	TD_INTERP_FLOAT(1000, 1000, TD_EASE_IN,  angle_0, 1, 0),
+	TD_SET_INT        (to_draw,    TD_DRAW_AERO),
+	// Rotations.
+	TD_SET_FLOAT      (angle_0, 1),
+	TD_SET_FLOAT      (angle_3, 1.1),
+	TD_SET_FLOAT      (angle_4, -1.1),
+	TD_SET_FLOAT      (angle_5, -0.25),
+	TD_INTERP_FLOAT   (   0, 3500, TD_LINEAR,   angle_1, 0, 10),
+	TD_INTERP_FLOAT   (   0, 4500, TD_LINEAR,   angle_2, 0, 4 * M_PI),
+	// Apple falling in from the top.
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE_OUT, angle_4, -1.1, 0),
+	// Birds passing by.
+	TD_INTERP_FLOAT   (2000, 2000, TD_LINEAR,   angle_3, 1.1, -1.1),
+	// End of sponsor spot.
+	TD_INTERP_INT     (1000,  500, TD_LINEAR,   sponsor_alpha, 255, 0),
+	// Make the apple HIT THE GROUND.
+	TD_INTERP_FLOAT   ( 500, 1000, TD_EASE_IN,  angle_4, 0, 0.45),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE_IN,  angle_5, -0.25, 0),
 	
-	// Become colors.
-	TD_SHOW_TEXT   ("Colorful"),
-	TD_SET_INT     (to_draw, TD_DRAW_NONE),
-	TD_INTERP_AHSV (2000, 2000, TD_EASE_IN,  background_color, 0xff8dffff, 0xffffffff),
-	TD_INTERP_AHSV (2000, 2000, TD_EASE_OUT, background_color, 0xff00ffff, 0xffff00ff),
+	/* ==== RAINBOW GEARS OF SCENE ==== */
+	TD_SET_INT        (to_draw,    TD_DRAW_RAINBOW),
+	// Expand the rainbow.
+	TD_SET_FLOAT      (angle_0, 0),
+	TD_SET_FLOAT      (angle_1, 0),
+	TD_SET_FLOAT      (angle_2, 0),
+	TD_INTERP_COL     (   0,  500, TD_EASE_OUT, background_color, 0xffbdefef, 0xff000000),
+	TD_INTERP_FLOAT   ( 500, 1000, TD_EASE_OUT, angle_0, 0, 1),
+	// Espressif spot.
+	TD_SET_SPONSOR    (SPON_ESP),
+	TD_INTERP_INT     ( 500,  500, TD_LINEAR,   sponsor_alpha, 0, 255),
+	// Fade to GEAR.
+	TD_SET_BOOL       (use_background, false),
+	TD_INTERP_FLOAT   (   0, 4000, TD_LINEAR,   angle_2, 0, M_PI),
+	TD_INTERP_FLOAT   (1000, 1000, TD_LINEAR,   angle_1, 0, 1),
+	TD_SET_INT        (background_color, 0xff00ff00),
+	TD_SET_BOOL       (use_background, true),
+	TD_DELAY          (2000),
+	// End of sponsor spot.
+	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 255, 0),
+	// ZOOM IN.
+	TD_INTERP_FLOAT   (   0, 1000, TD_EASE_IN,  buffer_scaling, 1, 20),
+	TD_INTERP_AHSV    (1000, 1000, TD_LINEAR,   background_color, 0xff55ffff, 0xffaaffff),
+	TD_SET_INT        (to_draw, TD_DRAW_NONE),
+	TD_SET_FLOAT      (buffer_scaling, 1),
 	
+	/* ==== FPGA SCENE ==== */
+	// Lattice spot.
+	TD_SET_SPONSOR    (SPON_LATTICE),
+	TD_SET_INT        (sponsor_col, 0xffffffff),
+	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 0, 255),
+	// Draw funny arcs and curves.
+	TD_SET_INT        (to_draw,    TD_DRAW_CURVES),
+	TD_SET_FLOAT      (angle_0,        0),
+	TD_SET_FLOAT      (angle_4,        0),
+	TD_INTERP_FLOAT   (   0, 5500, TD_EASE,     angle_2, 0, M_PI * 0.5),
+	TD_INTERP_FLOAT   (   0, 3000, TD_EASE,     angle_3, 0, 1),
+	TD_INTERP_FLOAT   (1500, 1500, TD_EASE,     angle_1, 0, 1),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE,     angle_1, 1, 2),
+	TD_INTERP_FLOAT   (1000, 1000, TD_EASE,     angle_1, 2, 3),
+	// Wait for just a bit.
+	TD_DELAY          (1000),
+	// Curves go away.
+	TD_INTERP_FLOAT   (   0, 1500, TD_EASE,     angle_4, 0, 1),
+	TD_INTERP_FLOAT   ( 750,  750, TD_EASE,     angle_0, 0, 1),
+	TD_INTERP_FLOAT   ( 250,  250, TD_EASE,     angle_0, 1, 2),
+	// End of sponsor spot.
+	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 255, 0),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE,     angle_0, 2, 3),
+	
+	/* ==== PRODUCTION SCENE ==== */
+	// The box line.
+	TD_SET_FLOAT      (angle_0, 0),
+	TD_SET_FLOAT      (angle_1, 0),
+	TD_SET_INT        (to_draw,    TD_DRAW_PROD),
+	TD_INTERP_AHSV    (   0,  500, TD_LINEAR,   background_color, 0xffaaffff, 0xffaa007f),
+	TD_INTERP_FLOAT   ( 500,  500, TD_LINEAR,   angle_2, 0, 1),
+	// Allnet spot.
+	TD_SET_SPONSOR    (SPON_ALLNET),
+	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 0, 255),
+	TD_DELAY          (1000),
+	
+	// aADACSGDjebsddjrbfhvbhdsj
+	TD_SET_FLOAT      (angle_1, 1),
+	TD_DELAY          ( 250),
+	TD_INTERP_FLOAT   ( 250,  250, TD_EASE_OUT, angle_1, 1, 0),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE,     angle_0, 0, 1),
+	// aADACSGDjebsddjrbfhvbhdsj
+	TD_SET_FLOAT      (angle_1, 1),
+	TD_DELAY          ( 250),
+	TD_INTERP_FLOAT   ( 250,  250, TD_EASE_OUT, angle_1, 1, 0),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE,     angle_0, 0, 1),
+	// aADACSGDjebsddjrbfhvbhdsj
+	TD_SET_FLOAT      (angle_1, 1),
+	TD_DELAY          ( 250),
+	TD_INTERP_FLOAT   ( 250,  250, TD_EASE_OUT, angle_1, 1, 0),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE,     angle_0, 0, 1),
+	// aADACSGDjebsddjrbfhvbhdsj
+	TD_SET_FLOAT      (angle_1, 1),
+	TD_DELAY          ( 250),
+	TD_INTERP_FLOAT   ( 250,  250, TD_EASE_OUT, angle_1, 1, 0),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE,     angle_0, 0, 1),
+	// End of sponsor spot.
+	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 255, 0),
+	// aADACSGDjebsddjrbfhvbhdsj
+	TD_SET_FLOAT      (angle_0, 0),
+	TD_INTERP_FLOAT   (   0, 1000, TD_LINEAR,   angle_2, 1, 0),
+	TD_SET_FLOAT      (angle_1, 1),
+	TD_DELAY          ( 250),
+	TD_INTERP_FLOAT   ( 250,  250, TD_EASE_OUT, angle_1, 1, 0),
+	TD_INTERP_FLOAT   ( 500,  500, TD_EASE,     angle_0, 0, 1),
+	TD_INTERP_COL     (   0,  500, TD_LINEAR,   background_color, 0xff7f7f7f, 0xffff3faf),
+	
+	/* ==== MAIL SCENE ==== */
+	// RasPi spot.
+	TD_SET_SPONSOR    (SPON_RASB_PI),
+	TD_SET_INT        (sponsor_col, 0xff000000),
+	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 0, 255),
+	// Mail flying around.
+	TD_SET_INT        (to_draw, TD_DRAW_POST),
+	TD_INTERP_FLOAT   (4500, 5000, TD_LINEAR,   angle_0, 0, 1),
+	// End of sponsor spot.
+	TD_INTERP_INT     (   0,  500, TD_LINEAR,   sponsor_alpha, 255, 0),
+	TD_DELAY          ( 500),
+	
+	/* ==== END OF THE DEMO ==== */
+	// No more sponsors.
+	TD_SET_SPONSOR    (-1),
 	// Prerender the tickets thing.
-	TD_DRAW_TITLE  ("MCH2022",
-					"Get your tickets at\n"
-					"tickets.mch2022.org"),
+	TD_DRAW_TITLE     ("MCH2022",
+					   "Get your tickets at\n"
+					   "tickets.mch2022.org"),
 	// Draw the tickets thing.
-	TD_SET_INT     (palette[1], 0xffffffff),
-	TD_SET_BOOL    (overlay_clip, true),
-	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
-	TD_DELAY       (5000),
-	TD_INTERP_COL  (1500, 1500, TD_LINEAR,  palette[0], 0xff000000, 0xffffffff),
+	TD_SET_BOOL       (overlay_clip, true),
+	TD_INTERP_COL     (   0, 1500, TD_LINEAR,  palette[0], 0x00ffffff, 0xff000000),
+	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[1], 0x00ffffff, 0xffffffff),
+	TD_DELAY          (5000),
+	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xff000000, 0xffffffff),
 	
 	// Mark the end.
-	TD_DELAY       (   0),
+	TD_DELAY          (   0),
 };
-static size_t n_events = sizeof(events) / sizeof(td_event_t);
+static const size_t n_events = sizeof(events) / sizeof(td_event_t);
 
 // Draws the appropriate frame of the tech demo for the given time.
 // Time is in milliseconds after the first frame.
@@ -729,7 +1288,7 @@ bool pax_techdemo_draw(size_t now) {
 	current_time = now;
 	
 	// Perform interpolations.
-	td_lerp_t *lerp = lerps;
+	td_lerp_list_t *lerp = lerps;
 	while (lerp) {
 		bool remove = lerp->end <= current_time;
 		if (remove) {
@@ -739,13 +1298,21 @@ bool pax_techdemo_draw(size_t now) {
 			if (lerp->prev) lerp->prev->next = lerp->next;
 			else lerps = lerp->next;
 			if (lerp->next) lerp->next->prev = lerp->prev;
+			// Free it.
+			td_lerp_list_t *next = lerp->next;
+			free(lerp);
+			lerp = next;
+		} else {
+			lerp = lerp->next;
 		}
-		lerp = lerp->next;
 	}
 	
 	// Handle events.
 	if (current_event < n_events) {
 		while (current_event < n_events && planned_time <= now) {
+			if (current_event == 0) {
+				printf("%p\n", events);
+			}
 			td_event_t event = events[current_event];
 			if (event.callback) {
 				ESP_LOGI(TAG, "Performing event %d.", current_event);
@@ -767,8 +1334,10 @@ bool pax_techdemo_draw(size_t now) {
 		lerp = lerp->next;
 	}
 	
-	// Use the dirty window to save resources.
-	pax_background(buffer, background_color);
+	if (use_background) {
+		// Fill the background.
+		pax_background(buffer, background_color);
+	}
 	
 	pax_reset_2d(buffer, PAX_RESET_TOP);
 	pax_push_2d(buffer);
@@ -791,6 +1360,15 @@ bool pax_techdemo_draw(size_t now) {
 		case TD_DRAW_AERO:
 			td_draw_aero();
 			break;
+		case TD_DRAW_RAINBOW:
+			td_draw_rainbow();
+			break;
+		case TD_DRAW_POST:
+			td_draw_post();
+			break;
+		case TD_DRAW_PROD:
+			td_draw_prod();
+			break;
 	}
 	
 	pax_pop_2d(buffer);
@@ -811,10 +1389,11 @@ bool pax_techdemo_draw(size_t now) {
 	
 	// Draw the sponsor.
 	if (sponsor_alpha && sponsor_logo) {
-		pax_col_t col = pax_col_argb(sponsor_alpha, 255, 255, 255);
+		pax_col_t img_col  = pax_col_argb(sponsor_alpha, 255, 255, 255);
+		pax_col_t text_col = pax_col_lerp(sponsor_alpha, sponsor_col & 0x00ffffff, sponsor_col);
 		// Draw the logo.
 		pax_shade_rect(
-			buffer, col,
+			buffer, img_col,
 			&PAX_SHADER_TEXTURE(sponsor_logo), NULL,
 			sponsor_logo_x, sponsor_logo_y,
 			sponsor_logo->width, sponsor_logo->height
@@ -822,7 +1401,7 @@ bool pax_techdemo_draw(size_t now) {
 		// Draw the text.
 		if (sponsor_text) {
 			pax_draw_text(
-				buffer, col,
+				buffer, text_col,
 				NULL, 18,
 				sponsor_text_x, sponsor_text_y,
 				sponsor_text

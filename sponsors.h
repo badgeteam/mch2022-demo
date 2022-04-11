@@ -12,6 +12,16 @@ extern "C" {
 enum sponsors {
 	// Temporary sponsor placeholder of.
 	SPON_TEMP,
+	// Allnet.
+	SPON_ALLNET,
+	// Bosch.
+	SPON_BOSCH,
+	// Espressif.
+	SPON_ESP,
+	// Lattice.
+	SPON_LATTICE,
+	// Raspberry pi.
+	SPON_RASB_PI,
 };
 
 struct sponsor {
