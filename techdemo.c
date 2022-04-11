@@ -104,7 +104,7 @@ static bool       use_background;
 static pax_col_t  background_color;
 
 // Linked list of interpolations.
-static td_lerp_t *lerps = NULL;
+static td_lerp_list_t *lerps = NULL;
 
 /* ================ config ================ */
 
@@ -113,7 +113,7 @@ static pax_buf_t *buffer = NULL;
 // Clip buffer complementary to the framebuffer.
 static pax_buf_t *clip_buffer = NULL;
 
-// Width of the frame.
+// Width of the frame./
 static int width;
 // Height of the frame.
 static int height;
@@ -171,8 +171,9 @@ void pax_techdemo_init(pax_buf_t *framebuffer, pax_buf_t *clipbuffer) {
 		// Reset interpolation list.
 		while (lerps) {
 			lerps->prev = NULL;
-			td_lerp_t *tmp = lerps->next;
+			td_lerp_list_t *tmp = lerps->next;
 			lerps->next = NULL;
+			free(lerps);
 			lerps = tmp;
 		}
 		
@@ -182,10 +183,8 @@ void pax_techdemo_init(pax_buf_t *framebuffer, pax_buf_t *clipbuffer) {
 		sponsor_alpha    = 0;
 		sponsor_col      = 0xff000000;
 		
-		palette[0]       = 0xffffffff;
-		palette[1]       = 0xffffffff;
-		palette[2]       = 0xffffffff;
-		palette[3]       = 0x00000000;
+		// palette[0]       = 0xffffffff;
+		// palette[1]       = 0xffffffff;
 		
 		clip_scaling     = 1;
 		clip_pan_x       = 0;
@@ -201,6 +200,8 @@ void pax_techdemo_init(pax_buf_t *framebuffer, pax_buf_t *clipbuffer) {
 		angle_1          = 0;
 		angle_2          = 0;
 		angle_3          = 0;
+		angle_4          = 0;
+		angle_5          = 0;
 		
 		buffer_scaling   = 1;
 		buffer_pan_x     = 0;
@@ -280,7 +281,7 @@ pax_col_t td_shader_rainbow(pax_col_t tint, int x, int y, float u, float v, void
 // Draws some title text on the clip buffer.
 // If there's multiple lines (split by '\n'), that's the subtitle.
 // Text is horizontally as wide as possible and vertically centered.
-static void td_draw_title(size_t planned_time, size_t planned_duration, void *args) {
+static void td_draw_title(size_t planned_time, size_t planned_duration, const void *args) {
 	char *raw        = strdup((char *) args);
 	char *index      = strchr(raw, '\n');
 	char *title;
@@ -322,12 +323,14 @@ static void td_draw_title(size_t planned_time, size_t planned_duration, void *ar
 }
 
 // Linearly interpolate a variable.
-static void td_add_lerp(size_t planned_time, size_t planned_duration, void *args) {
-	td_lerp_t *lerp = args;
-	lerp->start = planned_time;
-	lerp->end   = lerp->duration + planned_time;
-	lerp->prev  = NULL;
-	lerp->next  = lerps;
+static void td_add_lerp(size_t planned_time, size_t planned_duration, const void *args) {
+	const td_lerp_t      *subject = (td_lerp_t *) args;
+	td_lerp_list_t *lerp = malloc(sizeof(td_lerp_list_t));
+	lerp->start   = planned_time;
+	lerp->end     = subject->duration + planned_time;
+	lerp->prev    = NULL;
+	lerp->next    = lerps;
+	lerp->subject = subject;
 	if (lerps) {
 		lerps->prev = lerp;
 	}
@@ -335,7 +338,8 @@ static void td_add_lerp(size_t planned_time, size_t planned_duration, void *args
 }
 
 // Perform aforementioned interpolation.
-static void td_perform_lerp(td_lerp_t *lerp) {
+static void td_perform_lerp(td_lerp_list_t *lerp) {
+	const td_lerp_t *subj = lerp->subject;
 	float part = (current_time - lerp->start) / (float) (lerp->end - lerp->start);
 	if (current_time <= lerp->start) {
 		// Clip to beginning.
@@ -344,7 +348,7 @@ static void td_perform_lerp(td_lerp_t *lerp) {
 		// Clip to end.
 		part = 1.0;
 	} else {
-		switch (lerp->timing) {
+		switch (subj->timing) {
 			case TD_EASE_OUT:
 				// Ease-out:    y=-x²+2x
 				part = -part*part + 2*part;
@@ -359,41 +363,41 @@ static void td_perform_lerp(td_lerp_t *lerp) {
 				break;
 		}
 	}
-	switch (lerp->type) {
+	switch (subj->type) {
 		uint32_t bleh;
 		case TD_INTERP_TYPE_INT:
 			// Interpolate an integer.
-			*lerp->int_ptr = lerp->int_from + (lerp->int_to - lerp->int_from) * part;
+			*subj->int_ptr = subj->int_from + (subj->int_to - subj->int_from) * part;
 			break;
 		case TD_INTERP_TYPE_COL:
 			// Interpolate a (RGB) color.
-			*lerp->int_ptr = pax_col_lerp(part*255, lerp->int_from, lerp->int_to);
+			*subj->int_ptr = pax_col_lerp(part*255, subj->int_from, subj->int_to);
 			break;
 		case TD_INTERP_TYPE_HSV:
 			// Interpolate a (HSV) color.
-			bleh = pax_col_lerp(part*255, lerp->int_from, lerp->int_to);
-			*lerp->int_ptr = pax_col_ahsv(bleh >> 24, bleh >> 16, bleh >> 8, bleh);
+			bleh = pax_col_lerp(part*255, subj->int_from, subj->int_to);
+			*subj->int_ptr = pax_col_ahsv(bleh >> 24, bleh >> 16, bleh >> 8, bleh);
 			break;
 		case TD_INTERP_TYPE_FLOAT:
 			// Interpolate a float.
-			*lerp->float_ptr = lerp->float_from + (lerp->float_to - lerp->float_from) * part;
+			*subj->float_ptr = subj->float_from + (subj->float_to - subj->float_from) * part;
 			break;
 	}
 }
 
 // Set a variable of a primitive type.
-static void td_set_var(size_t planned_time, size_t planned_duration, void *args) {
+static void td_set_var(size_t planned_time, size_t planned_duration, const void *args) {
 	td_set_t *set = (td_set_t *) args;
 	memcpy(set->pointer, (void *) &set->value, set->size);
 }
 
 // Set THE string.
-static void td_set_str(size_t planned_time, size_t planned_duration, void *args) {
+static void td_set_str(size_t planned_time, size_t planned_duration, const void *args) {
 	text_str = (char *) args;
 }
 
 // Prepare the sponsor for showing.
-static void td_prep_sponsor(size_t planned_time, size_t planned_duration, void *args) {
+static void td_prep_sponsor(size_t planned_time, size_t planned_duration, const void *args) {
 	if ((int) args == -1) {
 		// Clean up.
 		if (sponsor_logo) {
@@ -939,13 +943,13 @@ static void td_draw_prod() {
 #define TD_SET_SPONSOR(id) {\
 			.duration = 0,\
 			.callback = td_prep_sponsor,\
-			.callback_args=id\
+			.callback_args=(const void *) id\
 		}
 #define TD_DRAW_TITLE(title, subtitle) {.duration=0,.callback=td_draw_title,.callback_args=title"\n"subtitle}
 #define TD_INTERP_INT(delay_time, interp_time, timing_func, variable, from, to) {\
 			.duration = delay_time,\
 			.callback = td_add_lerp,\
-			.callback_args = &(td_lerp_t){\
+			.callback_args = &(const td_lerp_t){\
 				.duration = interp_time,\
 				.int_ptr  = (int *) &(variable),\
 				.int_from = (from),\
@@ -957,7 +961,7 @@ static void td_draw_prod() {
 #define TD_INTERP_COL(delay_time, interp_time, timing_func, variable, from, to) {\
 			.duration = delay_time,\
 			.callback = td_add_lerp,\
-			.callback_args = &(td_lerp_t){\
+			.callback_args = &(const td_lerp_t){\
 				.duration = interp_time,\
 				.int_ptr  = (int *) &(variable),\
 				.int_from = (from),\
@@ -969,7 +973,7 @@ static void td_draw_prod() {
 #define TD_INTERP_AHSV(delay_time, interp_time, timing_func, variable, from, to) {\
 			.duration = delay_time,\
 			.callback = td_add_lerp,\
-			.callback_args = &(td_lerp_t){\
+			.callback_args = &(const td_lerp_t){\
 				.duration = interp_time,\
 				.int_ptr  = (int *) &(variable),\
 				.int_from = (from),\
@@ -981,7 +985,7 @@ static void td_draw_prod() {
 #define TD_INTERP_FLOAT(delay_time, interp_time, timing_func, variable, from, to) {\
 			.duration = delay_time,\
 			.callback = td_add_lerp,\
-			.callback_args = &(td_lerp_t){\
+			.callback_args = &(const td_lerp_t){\
 				.duration   = interp_time,\
 				.float_ptr  = (float *) &(variable),\
 				.float_from = (from),\
@@ -993,7 +997,7 @@ static void td_draw_prod() {
 #define TD_SET_0(type_size, variable, new_value) {\
 			.duration = 0,\
 			.callback = td_set_var,\
-			.callback_args = &(td_set_t){\
+			.callback_args = &(const td_set_t){\
 				.size     = (type_size),\
 				.pointer  = (void *) &(variable),\
 				.value    = (new_value)\
@@ -1005,7 +1009,7 @@ static void td_draw_prod() {
 #define TD_SET_FLOAT(variable, new_value) {\
 			.duration = 0,\
 			.callback = td_set_var,\
-			.callback_args = &(td_set_t){\
+			.callback_args = &(const td_set_t){\
 				.size     = sizeof(float),\
 				.pointer  = (void *) &(variable),\
 				.f_value  = (new_value)\
@@ -1014,7 +1018,7 @@ static void td_draw_prod() {
 #define TD_SET_STR(value) {\
 			.duration = 0,\
 			.callback = td_set_str,\
-			.callback_args = (value)\
+			.callback_args = (void*) (value)\
 		}
 #define TD_SHOW_LIGHT_TEXT(str) \
 		TD_SET_STR(str),\
@@ -1023,7 +1027,7 @@ static void td_draw_prod() {
 		TD_SET_STR(str),\
 		TD_INTERP_COL(0, 2500, TD_EASE_IN, text_col, 0xff000000, 0x00000000)
 
-static const td_event_t events[] = {
+const td_event_t events[] = {
 	
 	/* ==== TITLE SEQUENCE ==== */
 	TD_SET_INT        (background_color, 0xffbdefef),
@@ -1033,15 +1037,16 @@ static const td_event_t events[] = {
 					   "Friday, 22 July, 2022\n"
 					   "Zeewolde, Netherlands"),
 	// MCH2022 thingy.
-	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
+	TD_INTERP_COL     (3500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
+	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xff000000, 0xffffffff),
 	// Prerender some text.
 	TD_DRAW_TITLE     ("Badge.Team",
-					   "PRESENTS"),
+					   " PRESENTS "),
 	// Presents thingy.
-	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xff000000, 0x00ffffff),
 	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
+	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xff000000, 0xffffffff),
 	// Prerender some text.
-	TD_DRAW_TITLE     ("MCH badge",
+	TD_DRAW_TITLE     ("MCH2022",
 					   "Tech demo"),
 	// MCH2022_td.
 	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
@@ -1228,7 +1233,7 @@ bool pax_techdemo_draw(size_t now) {
 	current_time = now;
 	
 	// Perform interpolations.
-	td_lerp_t *lerp = lerps;
+	td_lerp_list_t *lerp = lerps;
 	while (lerp) {
 		bool remove = lerp->end <= current_time;
 		if (remove) {
@@ -1238,13 +1243,21 @@ bool pax_techdemo_draw(size_t now) {
 			if (lerp->prev) lerp->prev->next = lerp->next;
 			else lerps = lerp->next;
 			if (lerp->next) lerp->next->prev = lerp->prev;
+			// Free it.
+			td_lerp_list_t *next = lerp->next;
+			free(lerp);
+			lerp = next;
+		} else {
+			lerp = lerp->next;
 		}
-		lerp = lerp->next;
 	}
 	
 	// Handle events.
 	if (current_event < n_events) {
 		while (current_event < n_events && planned_time <= now) {
+			if (current_event == 0) {
+				printf("%p\n", events);
+			}
 			td_event_t event = events[current_event];
 			if (event.callback) {
 				ESP_LOGI(TAG, "Performing event %d.", current_event);

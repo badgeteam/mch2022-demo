@@ -57,27 +57,36 @@ extern "C" {
 #define PAX_TD_BUF_TYPE  PAX_BUF_1_PAL
 #define PAX_TD_BUF_STR  "PAX_BUF_1_PAL"
 
+// Used to represent time delays in a smaller size.
+typedef uint16_t td_delay_t;
+
 struct td_event;
 struct td_lerp;
+struct td_lerp_list;
 struct td_set;
 
-typedef struct td_event td_event_t;
-typedef struct td_lerp  td_lerp_t;
-typedef struct td_set td_set_t;
-typedef void (*td_func_t)(size_t planned_time, size_t planned_duration, void *args);
+typedef struct td_event     td_event_t;
+typedef struct td_lerp      td_lerp_t;
+typedef struct td_lerp_list td_lerp_list_t;
+typedef struct td_set       td_set_t;
+typedef void (*const td_func_t)(size_t planned_time, size_t planned_duration, const void *args);
 
 struct td_event {
-	size_t     duration;
-	td_func_t  callback;
-	void      *callback_args;
+	const td_delay_t duration;
+	const td_func_t  callback;
+	const void     * callback_args;
+};
+
+struct td_lerp_list {
+	td_lerp_list_t  *prev;
+	td_lerp_list_t  *next;
+	const td_lerp_t *subject;
+	uint32_t         start;
+	uint32_t         end;
 };
 
 struct td_lerp {
-	td_lerp_t *prev;
-	td_lerp_t *next;
-	size_t     start;
-	size_t     end;
-	size_t     duration;
+	td_delay_t duration;
 	union {
 		int   *int_ptr;
 		float *float_ptr;
