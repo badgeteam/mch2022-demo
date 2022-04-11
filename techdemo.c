@@ -24,6 +24,7 @@
 
 #include "techdemo.h"
 #include "sponsors.h"
+#include "images/td_anim.h"
 
 #include "pax_shaders.h"
 #include "pax_shapes.h"
@@ -429,6 +430,26 @@ static void td_prep_sponsor(size_t planned_time, size_t planned_duration, const 
 		pax_vec1_t size = pax_text_size(PAX_FONT_DEFAULT, 18, sponsor_text);
 		sponsor_text_x = buffer->width - size.x;
 		sponsor_text_y = buffer->height - size.y;
+	}
+}
+
+// Draw a frame of the intro.
+static void td_draw_intro(size_t planned_time, size_t planned_duration, const void *args) {
+	int frameno = (int) args;
+	if (frameno < 0 || frameno >= td_anim_frames_len) {
+		// Lolwut?
+		return;
+	}
+	td_anim_frame_t *frame = &td_anim_frames[frameno];
+	
+	if (frameno == 0) {
+		// Ensure correct background color.
+		pax_background(buffer, 0xffbdefef);
+	}
+	
+	// Iterate over and draw all the parts.
+	for (int i = 0; i < frame->len; i++) {
+		pax_insert_png_buf(buffer, frame->parts[i].raw, frame->parts[i].len, frame->parts[i].x, frame->parts[i].y, 0);
 	}
 }
 
@@ -940,6 +961,7 @@ static void td_draw_prod() {
 */
 
 #define TD_DELAY(time) {.duration=time,.callback=NULL}
+#define TD_INTRO(frametime, frameno) {.duration=frametime, .callback=td_draw_intro, .callback_args=(void*)frameno}
 #define TD_SET_SPONSOR(id) {\
 			.duration = 0,\
 			.callback = td_prep_sponsor,\
@@ -1027,6 +1049,8 @@ static void td_draw_prod() {
 		TD_SET_STR(str),\
 		TD_INTERP_COL(0, 2500, TD_EASE_IN, text_col, 0xff000000, 0x00000000)
 
+#define TD_ANIM_FRAMETIME 357
+
 const td_event_t events[] = {
 	
 	/* ==== TITLE SEQUENCE ==== */
@@ -1054,7 +1078,38 @@ const td_event_t events[] = {
 	TD_INTERP_COL     (2400, 2400, TD_LINEAR,  palette[1], 0xffffffff, 0x00ffffff),
 	TD_SET_BOOL       (overlay_clip, false),
 	
-	// TODO: Insert animation.
+	/* ==== INTRO ANIMATION ==== */
+	TD_SET_BOOL       (use_background, false),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 0),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 1),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 2),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 3),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 4),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 5),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 6),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 7),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 8),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 9),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 10),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 11),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 12),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 13),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 14),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 15),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 16),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 17),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 18),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 19),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 20),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 21),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 22),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 23),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 24),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 25),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 26),
+	TD_INTRO          (TD_ANIM_FRAMETIME, 27),
+	TD_DELAY          ( 500),
+	TD_SET_BOOL       (use_background, true),
 	
 	// // Spon test.
 	// TD_SET_INT        (sponsor_alpha, 255),
