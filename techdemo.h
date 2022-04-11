@@ -121,7 +121,7 @@ void pax_techdemo_init(pax_buf_t *framebuffer, pax_buf_t *clipbuffer);
 
 // Draws the appropriate frame of the tech demo for the given time.
 // Time is in milliseconds after the first frame.
-// Returns true when running, false when finished.
+// Returns false when running, true when finished.
 bool pax_techdemo_draw(size_t millis);
 
 #ifdef __cplusplus
