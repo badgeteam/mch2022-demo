@@ -184,8 +184,8 @@ void pax_techdemo_init(pax_buf_t *framebuffer, pax_buf_t *clipbuffer) {
 		sponsor_alpha    = 0;
 		sponsor_col      = 0xff000000;
 		
-		// palette[0]       = 0xffffffff;
-		// palette[1]       = 0xffffffff;
+		palette[0]       = 0xffffffff;
+		palette[1]       = 0xffffffff;
 		
 		clip_scaling     = 1;
 		clip_pan_x       = 0;
