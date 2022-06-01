@@ -128,7 +128,9 @@ static size_t current_time;
 // Planned time for the next event.
 static size_t planned_time;
 // Palette used for the clip buffer.
-static pax_col_t palette[2] = {
+static pax_col_t palette[4] = {
+	0xffffffff,
+	0xffffffff,
 	0xffffffff,
 	0xffffffff,
 };
@@ -288,11 +290,12 @@ static void td_draw_title(size_t planned_time, size_t planned_duration, const vo
 	char *title;
 	char *subtitle;
 	pax_buf_t *buf   = clip_buffer;
-	pax_font_t *font = PAX_FONT_DEFAULT;
+	pax_font_t *font = pax_get_font("saira condensed");
 	
 	// Split it up just a bit.
 	pax_col_t col = 0xff000000;
-	pax_background(buf, 1);
+	pax_background(buf, 3);
+	buf->type = PAX_BUF_2_GREY;
 	if (index) {
 		*index   = 0;
 		title    = raw;
@@ -319,6 +322,7 @@ static void td_draw_title(size_t planned_time, size_t planned_duration, const vo
 		float title_y            = (height - title_scale) * 0.5;
 		pax_draw_text(buf, col, font, title_scale, 0, title_y, title);
 	}
+	buf->type = PAX_TD_BUF_TYPE;
 	
 	free(raw);
 }
@@ -1061,21 +1065,33 @@ const td_event_t events[] = {
 					   "Friday, 22 July, 2022\n"
 					   "Zeewolde, Netherlands"),
 	// MCH2022 thingy.
+	TD_INTERP_COL     (   0, 1500, TD_LINEAR,  palette[2], 0xffffffff, 0xffaaaaaa),
+	TD_INTERP_COL     (   0, 1500, TD_LINEAR,  palette[1], 0xffffffff, 0xff555555),
 	TD_INTERP_COL     (3500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
+	TD_INTERP_COL     (   0, 1500, TD_LINEAR,  palette[2], 0xffaaaaaa, 0xffffffff),
+	TD_INTERP_COL     (   0, 1500, TD_LINEAR,  palette[1], 0xff555555, 0xffffffff),
 	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xff000000, 0xffffffff),
 	// Prerender some text.
 	TD_DRAW_TITLE     ("Badge.Team",
 					   " PRESENTS "),
 	// Presents thingy.
+	TD_INTERP_COL     (   0, 1500, TD_LINEAR,  palette[2], 0xffffffff, 0xffaaaaaa),
+	TD_INTERP_COL     (   0, 1500, TD_LINEAR,  palette[1], 0xffffffff, 0xff555555),
 	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
+	TD_INTERP_COL     (   0, 1500, TD_LINEAR,  palette[2], 0xffaaaaaa, 0xffffffff),
+	TD_INTERP_COL     (   0, 1500, TD_LINEAR,  palette[1], 0xff555555, 0xffffffff),
 	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xff000000, 0xffffffff),
 	// Prerender some text.
 	TD_DRAW_TITLE     ("MCH2022",
 					   "Tech demo"),
 	// MCH2022_td.
+	TD_INTERP_COL     (   0, 1500, TD_LINEAR,  palette[2], 0xffffffff, 0xffaaaaaa),
+	TD_INTERP_COL     (   0, 1500, TD_LINEAR,  palette[1], 0xffffffff, 0xff555555),
 	TD_INTERP_COL     (1500, 1500, TD_LINEAR,  palette[0], 0xffffffff, 0xff000000),
-	TD_INTERP_COL     (   0, 2400, TD_LINEAR,  palette[0], 0xff000000, 0x00000000),
-	TD_INTERP_COL     (2400, 2400, TD_LINEAR,  palette[1], 0xffffffff, 0x00ffffff),
+	TD_INTERP_COL     (   0, 2400, TD_LINEAR,  palette[3], 0xffffffff, 0x00ffffff),
+	TD_INTERP_COL     (   0, 2400, TD_LINEAR,  palette[2], 0xffaaaaaa, 0x00aaaaaa),
+	TD_INTERP_COL     (   0, 2400, TD_LINEAR,  palette[1], 0xff555555, 0x00555555),
+	TD_INTERP_COL     (2400, 2400, TD_LINEAR,  palette[0], 0xff000000, 0x00000000),
 	TD_SET_BOOL       (overlay_clip, false),
 	
 	/* ==== INTRO ANIMATION ==== */
@@ -1375,7 +1391,7 @@ bool pax_techdemo_draw(size_t now) {
 	
 	// Draw the text overlay.
 	if (text_col >= 0x01000000) {
-		pax_draw_text(buffer, text_col, PAX_FONT_DEFAULT, text_size, 0, 0, text_str);
+		pax_draw_text(buffer, text_col, pax_get_font("saira regular"), text_size, 0, 0, text_str);
 	}
 	
 	// Draw the global overlay as clip.
@@ -1388,7 +1404,7 @@ bool pax_techdemo_draw(size_t now) {
 	}
 	
 	// Draw the sponsor.
-	if (sponsor_alpha && sponsor_logo) {
+	if (sponsor_alpha && sponsor_logo && sponsor_logo->buf) {
 		pax_col_t img_col  = pax_col_argb(sponsor_alpha, 255, 255, 255);
 		pax_col_t text_col = pax_col_lerp(sponsor_alpha, sponsor_col & 0x00ffffff, sponsor_col);
 		// Draw the logo.
@@ -1402,7 +1418,7 @@ bool pax_techdemo_draw(size_t now) {
 		if (sponsor_text) {
 			pax_draw_text(
 				buffer, text_col,
-				NULL, 18,
+				pax_get_font("saira regular"), 18,
 				sponsor_text_x, sponsor_text_y,
 				sponsor_text
 			);
