@@ -1402,7 +1402,7 @@ bool pax_techdemo_draw(size_t now) {
 		if (sponsor_text) {
 			pax_draw_text(
 				buffer, text_col,
-				NULL, 18,
+				pax_font_saira_regular, 18,
 				sponsor_text_x, sponsor_text_y,
 				sponsor_text
 			);
