@@ -291,7 +291,7 @@ static void td_draw_title(size_t planned_time, size_t planned_duration, const vo
 	pax_font_t *font = PAX_FONT_DEFAULT;
 	
 	// Split it up just a bit.
-	pax_col_t col = 0xff000001;
+	pax_col_t col = 1;
 	pax_background(buf, 1);
 	if (index) {
 		*index   = 0;
